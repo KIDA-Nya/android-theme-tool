@@ -44,6 +44,17 @@ W/CommonApplyFlag_UxAidlHelper: callback onApplyResult ... code = 0
 | 安装后权限 | ❌ `OPPO_COMPONENT_SAFE`、`safe.SETTINGS`、`WRITE_SECURE_SETTINGS`、`MOUNT_UNMOUNT_FILESYSTEMS`、`INSTALL_PACKAGES` **全部丢失** |
 | 结论 | 重签后应用变成"没有特权的壳"，反而不能应用主题 |
 
+### 2.3 当时改了哪三处门禁（供复核，不建议采用）
+
+| # | 文件 | 原逻辑 | 改动 |
+|---|---|---|---|
+| 1 | `ThemeInstaller.smali` | `getBoolean("key_is_from_third_part", false)` → 为真则返回 `-104` | 把键名改成不存在的 `key_is_from_third_part_blocked`，使分支永不命中 |
+| 2 | `resourcemanager/theme/a.smali` | `r()` 中 `if-eqz p2, :cond_52`（第三方→返回 `-5`） | 改为无条件 `goto :cond_52`，强制走「解包落盘」分支 |
+| 3 | `resourcemanager/theme/a$a.smali` | `run()` 中 `EditorVersion` 与 `getThemeOsVersion()` 不等则中止 | `if-nez v4, :cond_a7` 改为 `goto :cond_a7`，跳过版本比对 |
+
+结果：包能装上、能启动，但**签名级权限全部失效**，投递 `ThemeApplyService` 时被拒。
+换句话说，改掉的三处门禁本来就不是真正的瓶颈，权限才是。
+
 已回滚：安装包 SHA256 恢复为 `3ab0ad9f…`，权限已恢复，应用正常运行。
 
 > 注：`/system_ext/etc/permissions/privapp-permissions-oplus-common.xml:821` 里确有
