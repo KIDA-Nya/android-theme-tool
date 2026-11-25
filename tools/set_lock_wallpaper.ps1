@@ -64,7 +64,7 @@ $imgItem = Get-Item -LiteralPath $Image
 
 # ---------------------------------------------------------------- 设备
 
-Initialize-Device -Device $Device -AppPackage 'com.heytap.themestore' | Out-Null
+Initialize-Device -Device $Device | Out-Null
 
 $installed = (Invoke-Adb @('shell', "pm list packages $LOCKPKG")) | Out-String
 if ($installed -notmatch [regex]::Escape($LOCKPKG)) {

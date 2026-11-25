@@ -27,8 +27,9 @@ case "$(uname -s 2>/dev/null)" in
         export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
         ;;
 esac
-PKG=com.heytap.themestore
-SVC="$PKG/com.nearme.themespace.services.ThemeApplyService"
+# 主题商店包名/服务组件在不同 ROM 上不同，下面会探测后填充
+PKG=""
+SVC=""
 REMOTE=/sdcard/Download/theme_apply.theme
 TIMEOUT=${TIMEOUT:-180}
 
@@ -43,6 +44,22 @@ warn() { echo "  [!]  $*"; }
 die()  { echo "  [x]  $*"; exit 1; }
 
 run() { $ADB "$@"; }
+
+# ---------------------------------------------------------------- 探测主题商店
+
+detect_store() {
+    for p in com.heytap.themestore com.oplus.themestore com.nearme.themestore com.oppo.themestore; do
+        $ADB shell "pm list packages $p" 2>/dev/null | tr -d '\r' | grep -qx "package:$p" || continue
+        comp=$($ADB shell "dumpsys package $p" 2>/dev/null | tr -d '\r' \
+               | grep -oE "$p/[^ ]*ThemeApplyService" | head -1)
+        if [ -n "$comp" ]; then
+            PKG=$p
+            SVC=$comp
+            return 0
+        fi
+    done
+    return 1
+}
 
 # ---------------------------------------------------------------- 状态
 
@@ -72,6 +89,8 @@ theme_uuid() {
 }
 
 # ---------------------------------------------------------------- 参数
+
+detect_store || true
 
 case "${1:-}" in
     ''|-h|--help)
@@ -116,7 +135,8 @@ run shell "input keyevent KEYCODE_WAKEUP" >/dev/null 2>&1
 run shell "am force-stop $PKG" >/dev/null 2>&1
 sleep 1
 
-say "投递 ..."
+[ -z "$SVC" ] && die "没找到主题商店的 ThemeApplyService（本工具只适用于 ColorOS 主题栈）"
+say "投递 ...（$PKG）"
 run logcat -c >/dev/null 2>&1
 run shell "am startservice -n $SVC --es THEME_PATH $REMOTE" \
     | tr -d '\r' | grep -iE 'Starting|Error|Exception|denied' | sed 's/^/  /'

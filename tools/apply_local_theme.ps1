@@ -55,8 +55,9 @@ param(
 
 . (Join-Path $PSScriptRoot 'common.ps1')
 
-$PKG = 'com.heytap.themestore'
-$SVC = "$PKG/com.nearme.themespace.services.ThemeApplyService"
+# 包名与服务组件由 common.ps1 的 Resolve-ThemeStore 探测后填充（不同 ROM 可能不同）
+$PKG = ''
+$SVC = ''
 $REMOTE = '/sdcard/Download/theme_apply.theme'
 $ALIGN_PY = Join-Path $PSScriptRoot 'theme_align.py'
 
@@ -167,7 +168,9 @@ function Test-ModulesApplied {
 
 # ---------------------------------------------------------------- 初始化
 
-$hasRoot = Initialize-Device -Device $Device -AppPackage $PKG
+$hasRoot = Initialize-Device -Device $Device
+$PKG = $script:ThemePkg
+$SVC = $script:ThemeSvc
 if ($Root -and -not $hasRoot) {
     Write-Warn2 '要求 root 但未取得，将以 shell 身份继续（无法解冻进程，失败时请重试）'
 }

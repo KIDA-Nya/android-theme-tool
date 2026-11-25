@@ -26,6 +26,14 @@
 - Python 3.8+：只影响「模块声明对齐」，没有也能跑（图标可能不生效）；或设 `THEME_PYTHON`
 - root **不需要**。有 root 会更稳（自动解冻进程、核对模块）
 
+**换机型/换 ROM 先探测**
+
+```powershell
+.\tools\probe.ps1
+```
+
+逐项检查主题商店服务、权限、uxdesign、`/data/theme`、冻结控制，给出可用性结论。
+
 **主题格式**
 
 必须是 **ColorOS ROM 主题包**：根目录有 `themeInfo.xml`，模块以 zip 形式平铺存放。

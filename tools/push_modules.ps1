@@ -35,7 +35,7 @@ Write-Warn2 '提醒：直接写文件不一定会被 uxdesign 认作「已应用
 Write-Info '首选 apply_local_theme.ps1 走一次带声明的正常应用。'
 Write-Host ''
 
-Initialize-Device -Device $Device -AppPackage 'com.heytap.themestore' | Out-Null
+Initialize-Device -Device $Device | Out-Null
 if ($SuCmd -eq $null) { throw '本脚本需要 root（要写 /data/theme 并改属主）。' }
 
 # uxdesign 的 uid/gid —— 绝不能硬编码

@@ -177,6 +177,7 @@ theme
 │  ├─ build-lockwall.ps1   构建 LockWall APK
 │  ├─ common.ps1           共享函数（adb/python 探测、安全执行、解冻）
 │  ├─ adb-apply.sh         纯 adb 投递（无 PowerShell / 无 Python 依赖）
+│  ├─ probe.ps1            兼容性探测（换机型先跑这个）
 │  ├─ theme_align.py       补全模块声明
 │  ├─ check_theme.py       应用前体检
 │  ├─ extract_keyguard.py  提取锁屏壁纸
@@ -190,6 +191,7 @@ theme
    ├─ ANALYSIS.md          完整逆向分析
    ├─ ADB.md               纯 adb 最小流程与排错
    ├─ USAGE.md             使用手册（四种一键方式 + 场景 + 排错）
+   ├─ PORTABILITY.md       可移植性与健壮性（换机型看这个）
    └─ PHONE.md             手机端说明
 ```
 
@@ -202,6 +204,29 @@ theme
 ```
 
 只用 SDK 自带命令行工具（`javac` → `d8` → `aapt2` → `zipalign` → `apksigner`），不需要 Gradle。
+
+---
+
+## 能用在你手机上吗
+
+先说结论：**这是 ColorOS 主题栈的调用器，不是通用换主题工具。**
+
+| 范围 | 判断 |
+|---|---|
+| 一加 LE2123 · ColorOS 16 | ✅ 本项目所有实测机型 |
+| OPPO / 一加 / realme 的 ColorOS 12–16、realmeUI 3+ | 大概率可用，换机前先跑探测 |
+| ColorOS 11 及更早 | ❌ 没有 uxdesign，走完全不同的本地解包路径 |
+| 华为/荣耀（.hwt）、小米（.mtz）、三星、原生 Android | ❌ 没有这套组件 |
+
+换机型第一件事：
+
+```powershell
+.\tools\probe.ps1          # 电脑端
+theme --probe              # 手机端
+```
+
+它会逐项检查主题商店服务、权限、uxdesign、`/data/theme`、冻结控制等，
+给出「完全可用 / 有降级 / 不可用」的判定。细节见 [docs/PORTABILITY.md](docs/PORTABILITY.md)。
 
 ---
 

@@ -88,6 +88,54 @@ function Select-Device {
 
 # ---------------------------------------------------------------- root / shell
 
+function Resolve-ThemeStore {
+    <#
+      探测主题商店的包名与 ThemeApplyService 组件全名。
+      不同 ROM 两者都可能不同，例如：
+        com.heytap.themestore/com.nearme.themespace.services.ThemeApplyService
+        com.oplus.themestore/.services.ThemeApplyService
+      只探测「已安装 + 确实存在该服务」的组合，避免误选系统里另一个同名应用。
+    #>
+    if ($script:ThemePkg -and $script:ThemeSvc) {
+        return [pscustomobject]@{ Package = $script:ThemePkg; Service = $script:ThemeSvc }
+    }
+
+    $candidates = @(
+        'com.heytap.themestore',
+        'com.oplus.themestore',
+        'com.nearme.themestore',
+        'com.oppo.themestore',
+        'com.coloros.themestore'
+    )
+
+    $installed = ((Invoke-Adb @('shell', 'pm list packages')) | Out-String)
+    $picked = $null
+
+    foreach ($pkg in $candidates) {
+        if ($installed -notmatch ('package:' + [regex]::Escape($pkg) + '\s')) { continue }
+        $dump = ((Invoke-Adb @('shell', "dumpsys package $pkg")) | Out-String)
+        $m = [regex]::Match($dump, [regex]::Escape($pkg) + '/([^\s]*ThemeApplyService)')
+        if ($m.Success) {
+            $picked = [pscustomobject]@{ Package = $pkg; Service = "$pkg/$($m.Groups[1].Value)" }
+            break
+        }
+    }
+
+    if (-not $picked) {
+        $found = @()
+        foreach ($pkg in $candidates) {
+            if ($installed -match ('package:' + [regex]::Escape($pkg) + '\s')) { $found += $pkg }
+        }
+        throw ("没找到主题商店的 ThemeApplyService。`n" +
+               "  已安装候选：{0}`n" +
+               "  说明：本方案依赖 OPPO/一加/realme 的 ColorOS 主题栈，其它品牌不适用。" -f ($(if ($found) { $found -join ', ' } else { '（无）' })))
+    }
+
+    $script:ThemePkg = $picked.Package
+    $script:ThemeSvc = $picked.Service
+    return $picked
+}
+
 function Test-Root {
     # 依次尝试：已是 root → su → ksud 软链
     if (-not $script:Device) { return $false }
@@ -120,10 +168,15 @@ function Initialize-Device {
       完成设备侧准备：选设备、探 root、取应用 uid、就绪时投放解冻脚本。
       返回 $true 表示拿到 root（可选能力），$false 表示只能走 shell 身份。
     #>
-    param([string]$Device = '', [string]$AppPackage = 'com.heytap.themestore')
+    param([string]$Device = '', [string]$AppPackage = '')
 
     Select-Device $Device | Out-Null
     Write-Info "设备: $($script:Device)"
+
+    $store = Resolve-ThemeStore
+    if (-not $AppPackage) { $AppPackage = $store.Package }
+    Write-Info "主题商店: $($store.Package)"
+    Write-Info "服务组件: $($store.Service)"
 
     $isRoot = Test-Root
     if ($isRoot) {

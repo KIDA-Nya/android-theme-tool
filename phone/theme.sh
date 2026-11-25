@@ -15,8 +15,27 @@
 #   sh theme.sh --status                 # 查看当前主题
 #   sh theme.sh --help                   # 显示本帮助
 
-PKG=com.heytap.themestore
-SVC="$PKG/com.nearme.themespace.services.ThemeApplyService"
+# 主题商店包名与服务组件在不同 ROM 上不同，这里自动探测：
+#   com.heytap.themestore/com.nearme.themespace.services.ThemeApplyService
+#   com.oplus.themestore/.services.ThemeApplyService
+PAC_LIST=""
+for p in com.heytap.themestore com.oplus.themestore com.nearme.themestore com.oppo.themestore; do
+  pm list packages 2>/dev/null | grep -qx "package:$p" && PAC_LIST="$PAC_LIST $p"
+done
+
+PKG=""
+SVC=""
+for p in $PAC_LIST; do
+  comp=$(dumpsys package "$p" 2>/dev/null | grep -oE "$p/[^ ]*ThemeApplyService" | head -1)
+  if [ -n "$comp" ]; then
+    PKG=$p
+    SVC=$comp
+    break
+  fi
+done
+
+[ -z "$PKG" ] && PKG=com.heytap.themestore
+[ -z "$SVC" ] && SVC="$PKG/com.nearme.themespace.services.ThemeApplyService"
 LOCKPKG=com.keke.lockwall
 TMP=/data/local/tmp
 TIMEOUT=300
@@ -77,6 +96,7 @@ for a in "$@"; do
     --desktop)   DESKTOP=1 ;;
     --lock-only) MODE=lock ;;
     --status)    MODE=status ;;
+    --probe)     MODE=probe ;;
     --latest)    LATEST=1 ;;
     -h|--help)   MODE=help ;;
     *)           [ -z "$THEME" ] && THEME="$a" ;;
@@ -386,6 +406,44 @@ case "$MODE" in
   status)
     setup_root >/dev/null 2>&1
     do_status
+    exit 0 ;;
+  probe)
+    setup_root >/dev/null 2>&1
+    echo ""
+    echo "=== 兼容性探测 ==="
+    say "身份        : $(id 2>/dev/null | cut -d' ' -f1)"
+    say "主题商店    : $PKG"
+    say "服务组件    : $SVC"
+    SVC_DECL=$(dumpsys package "$PKG" 2>/dev/null | grep -c "ThemeApplyService")
+    say "服务声明数  : $SVC_DECL"
+    say "权限要求    : oppo.permission.OPPO_COMPONENT_SAFE（签名级，shell/root 才有）"
+    say "主题版本    : $(getprop ro.oplus.theme.version)"
+    say "当前主题    : $(settings get global applied_default_theme_package_name)"
+    if pm list packages 2>/dev/null | grep -qx "package:com.oplus.uxdesign"; then
+      say "uxdesign    : 已安装（OS12+ 应用通道）"
+    else
+      say "uxdesign    : 未安装（可能走旧版通道，行为不同）"
+    fi
+    if [ -d /data/theme ]; then
+      say "/data/theme  : 存在（$(ls -1 /data/theme 2>/dev/null | wc -l) 项）"
+    else
+      say "/data/theme  : 不存在（该 ROM 可能用别的资源目录）"
+    fi
+    if ls /sys/fs/cgroup/apps >/dev/null 2>&1; then
+      say "冻结控制    : 支持（cgroup v2 /apps）"
+    else
+      say "冻结控制    : 不支持（无法自动解冻，失败时需手动重试）"
+    fi
+    if pm list packages 2>/dev/null | grep -qx "package:com.keke.lockwall"; then
+      say "LockWall    : 已安装（可设锁屏壁纸）"
+    else
+      say "LockWall    : 未安装（锁屏壁纸不可用）"
+    fi
+    if command -v zip >/dev/null 2>&1; then
+      say "zip         : 可用（可自动对齐声明）"
+    else
+      say "zip         : 不可用（图标可能不生效）"
+    fi
     exit 0 ;;
 esac
 
