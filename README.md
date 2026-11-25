@@ -97,6 +97,27 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 .\tools\apply_local_theme.ps1 -Revert                   # 恢复默认
 ```
 
+### 只想用纯 adb？4 条命令就够
+
+不装 PowerShell 脚本、不用 Python，最小流程：
+
+```bash
+adb push 主题.theme /sdcard/Download/theme_apply.theme
+adb shell appops set com.heytap.themestore MANAGE_EXTERNAL_STORAGE allow
+adb shell input keyevent KEYCODE_WAKEUP
+adb shell am startservice -n com.heytap.themestore/com.nearme.themespace.services.ThemeApplyService \
+  --es THEME_PATH /sdcard/Download/theme_apply.theme
+```
+
+或用封装好的脚本（Git Bash / WSL / macOS / Linux）：
+
+```bash
+./tools/adb-apply.sh 主题.theme
+./tools/adb-apply.sh --status
+```
+
+细节、正常日志与排错见 [docs/ADB.md](docs/ADB.md)。
+
 ---
 
 ## 快速开始（手机端，无需电脑）
@@ -139,6 +160,7 @@ theme
 │  ├─ push_modules.ps1     直接补写 /data/theme（兜底）
 │  ├─ build-lockwall.ps1   构建 LockWall APK
 │  ├─ common.ps1           共享函数（adb/python 探测、安全执行、解冻）
+│  ├─ adb-apply.sh         纯 adb 投递（无 PowerShell / 无 Python 依赖）
 │  ├─ theme_align.py       补全模块声明
 │  ├─ check_theme.py       应用前体检
 │  ├─ extract_keyguard.py  提取锁屏壁纸
@@ -149,6 +171,7 @@ theme
 ├─ lockwall/               LockWall 源码（壁纸小工具）
 └─ docs/
    ├─ ANALYSIS.md          完整逆向分析
+   ├─ ADB.md               纯 adb 最小流程与排错
    └─ PHONE.md             手机端说明
 ```
 
