@@ -1,0 +1,86 @@
+# ---------------------------------------------------------------
+# 主题包 / APK / 样本：体积大，且属于第三方版权内容，不入库
+# ---------------------------------------------------------------
+*.theme
+*.hwt
+*.apk
+*.apex
+*.zip
+*.idsig
+
+# ---------------------------------------------------------------
+# 构建产物
+# ---------------------------------------------------------------
+/dist/
+/build/
+/out/
+/lockwall/out/
+*.keystore
+*.jks
+*.class
+
+# ---------------------------------------------------------------
+# 逆向分析中间产物（本地保留即可）
+# ---------------------------------------------------------------
+/extracted/
+/bak_classes4/
+/dis/
+/dis2/
+/dis3/
+/smali/
+/arsc/
+/scan/
+/ida_db/
+/pydeps/
+/shizuku-lib/
+/shizuku-app/
+
+*.dex
+*.i64
+*.i64.id0
+*.i64.id1
+*.i64.nam
+*.i64.til
+*.so
+
+dex_strings*.txt
+locate_map.txt
+xref*.txt*
+lockwall/assets/*.jpg
+lockwall/assets/*.png
+xref_out.txt
+manifest.xml
+arsc_import_strings.txt
+scratch_*.txt
+ida_*.json
+ida_*_pseudo.c
+
+# 一次性分析脚本（不进仓库）
+/dex_strings.py
+/dump_*.py
+/locate_dex.py
+/plan_dump.py
+/scan_const.py
+/xref*.py
+/ida_*.py
+/dev_probe*.sh
+/unfreeze.sh
+
+# ---------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ---------------------------------------------------------------
+# 编辑器 / 系统
+# ---------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+Desktop.ini
+.DS_Store
