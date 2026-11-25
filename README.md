@@ -192,6 +192,7 @@ theme
    ├─ ADB.md               纯 adb 最小流程与排错
    ├─ USAGE.md             使用手册（四种一键方式 + 场景 + 排错）
    ├─ PORTABILITY.md       可移植性与健壮性（换机型看这个）
+   ├─ UNIVERSAL.md         跨品牌通用策略调研与适配器架构
    └─ PHONE.md             手机端说明
 ```
 
@@ -226,7 +227,11 @@ theme --probe              # 手机端
 ```
 
 它会逐项检查主题商店服务、权限、uxdesign、`/data/theme`、冻结控制等，
-给出「完全可用 / 有降级 / 不可用」的判定。细节见 [docs/PORTABILITY.md](docs/PORTABILITY.md)。
+并标注**平台识别**与**适配器**（ColorOS 已实现，MIUI/EMUI 未实现），
+给出「完全可用 / 有降级 / 不可用」的判定。
+
+想了解能不能扩展到小米/华为，见 [docs/UNIVERSAL.md](docs/UNIVERSAL.md)；
+机型细节见 [docs/PORTABILITY.md](docs/PORTABILITY.md)。
 
 ---
 

@@ -87,6 +87,18 @@ Add-Row 'ro.oplus.theme.version' $(if ($ver) { $ver } else { '（空）' }) $(if
 $cur = ((Invoke-Adb @('shell', 'settings get global applied_default_theme_package_name')) | Out-String).Trim()
 Add-Row '当前主题 UUID' $(if ($cur -and $cur -ne 'null') { $cur } else { '（未设置）' }) 'INFO'
 
+# ---------------------------------------------------------------- 平台识别
+$pkgs = ((Invoke-Adb @('shell', 'pm list packages')) | Out-String)
+$stack = 'unknown'
+$adapter = '（无）'
+
+if ($store) { $stack = 'coloros'; $adapter = 'coloros（已实现）' }
+elseif ($pkgs -match 'com\.android\.thememanager|com\.miui\.themestore') { $stack = 'miui'; $adapter = 'miui（未实现）' }
+elseif ($pkgs -match 'com\.huawei\.android\.thememanager|com\.hihonor\..*thememanager') { $stack = 'emui'; $adapter = 'emui（未实现）' }
+
+Add-Row '平台识别' $stack $(if ($stack -eq 'coloros') { 'OK' } elseif ($stack -eq 'unknown') { 'FAIL' } else { 'WARN' })
+Add-Row '适配器' $adapter $(if ($stack -eq 'coloros') { 'OK' } else { 'INFO' })
+
 # ---------------------------------------------------------------- uxdesign
 $ux = ((Invoke-Adb @('shell', 'pm list packages com.oplus.uxdesign')) | Out-String)
 $hasUx = $ux -match 'com\.oplus\.uxdesign'
@@ -138,6 +150,11 @@ if ($fails.Count -gt 0) {
 elseif (-not $hasRoot -and -not $isShell) {
     Write-Host '  结论：权限不足' -ForegroundColor Yellow
     Write-Host '    投递服务需要 shell/root 身份（签名级权限）。请用 adb shell 或 root 运行。'
+}
+elseif ($stack -and $stack -ne 'coloros') {
+    Write-Host ("  结论：当前设备是 {0} 平台，本项目暂无对应适配器" -f $stack) -ForegroundColor Yellow
+    Write-Host '    现有实现只覆盖 ColorOS 主题栈（ThemeApplyService + uxdesign + /data/theme）。'
+    Write-Host '    其它平台的差异与移植要点见 docs/PORTABILITY.md 与 docs/UNIVERSAL.md。'
 }
 elseif ($warns.Count -gt 0) {
     Write-Host '  结论：可用，但有降级项' -ForegroundColor Yellow
