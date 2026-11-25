@@ -102,22 +102,29 @@ settings global applied_default_theme_package_name = <主题 PackageName/UUID>
 
 | 文件 | 用途 |
 |---|---|
-| `tools/apply_local_theme.ps1` | 一键应用本地 `.theme`（含 `-Verify` 体检、`-Revert` 恢复默认） |
-| `tools/inspect_theme.py` | 主题包静态体检：目录结构、themeInfo.xml、内嵌 zip 清单 |
-| `build/original.apk` | 原包备份（回滚用） |
-| `build/data_backup.tar.gz` | 应用数据备份（回滚用） |
+| `tools/apply_local_theme.ps1` | 一键应用本地 `.theme`（`-Verify` 体检 / `-Revert` 恢复默认 / `-NoLock` / `-NoAlign`） |
+| `tools/theme_console.ps1` | 交互式菜单（体检 / 应用 / 锁屏 / 状态 / 恢复 / 补齐） |
+| `tools/check_theme.py` | 主题包体检：EditorVersion、声明与实际条目比对、锁屏资源 |
+| `tools/theme_align.py` | 补全模块声明（扫描 zip 实际条目） |
+| `tools/extract_keyguard.py` | 从 `wallpaper` 内嵌 zip 提取锁屏壁纸 |
+| `tools/newuuid.py` | 换 UUID（规避「同 UUID 视为已应用」） |
+| `tools/push_modules.ps1` | 直接向 `/data/theme` 补文件（兜底，需 root） |
+| `tools/build-lockwall.ps1` | 构建 LockWall（javac/d8/aapt2/apksigner，无需 Gradle） |
+| `phone/theme.sh` | 手机端脚本（root / rish / adb shell 三种身份） |
+| `phone/setup.sh` | Termux 一次性安装（装 rish、生成 `theme` 命令） |
 
 用法：
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass -Force
-.\tools\apply_local_theme.ps1 -Theme 'D:\app\theme\纳西妲ColorOS16主题.theme'
+.\tools\apply_local_theme.ps1 -Theme '.\你的主题.theme'
 .\tools\apply_local_theme.ps1 -Verify
 .\tools\apply_local_theme.ps1 -Revert
 ```
 
-脚本会自动：校验 `themeInfo.xml` / `EditorVersion` → 推送 → 授存储权限 →
-`startservice` 投递 → 采集日志 → 输出系统主题状态。
+脚本会自动：校验 `themeInfo.xml` / `EditorVersion` → 对齐声明 → 推送 →
+授存储权限 → 关冻结并备份原值 → `startservice` 投递 → 轮询（自动解冻）→
+还原设置 → 输出系统主题状态 → 核对模块落盘。
 
 ---
 
@@ -161,7 +168,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 | 做法 | 是否需要改包 | 前提 | 说明 |
 |---|---|---|---|
 | 商店 `n9b` 通道 | 否 | 需在持 `safe.SETTINGS` 的进程里实现 AIDL 调用 | 最正宗，但工作量大 |
-| **直接写 `/data/theme`** | **否** | root | 已实现为 `tools\push_modules.ps1`：读 zip 实际条目，把缺失模块写入 `/data/theme`，改属主 `u0_a307`，重启桌面刷新 |
+| **直接写 `/data/theme`** | **否** | root | 已实现为 `tools\push_modules.ps1`：读 zip 实际条目，把缺失模块写入 `/data/theme`，属主改为 uxdesign 的实际 uid（运行时探测），重启桌面刷新 |
 
 因此本项目给了两条等价路线：
 - **无 root/无 zip**：先用 `theme_align.py` 在电脑上对齐（改写声明）；
@@ -254,7 +261,7 @@ res/drawable-xxhdpi/oppo_default_wallpaper.png            180,597 B
 
 | 端 | 入口 | 说明 |
 |---|---|---|
-| 电脑 | `主题工具.bat` | 双击菜单：应用（自动含锁屏）/ 状态 / 恢复默认 / 只设锁屏 |
+| 电脑 | `主题工具.bat` | 双击菜单：体检 / 应用（自动含锁屏）/ 锁屏 / 状态 / 恢复 / 补齐 |
 | 电脑 | `tools\*.ps1` | 命令行版本，可脚本化 |
 | 手机 | `phone\theme.sh` | Termux + root 运行，功能同上（对齐需 `pkg install zip`） |
 | 手机 | `phone\lockwall.apk` | 设锁屏壁纸的小工具 |

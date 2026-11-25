@@ -164,6 +164,25 @@ theme
 
 ---
 
+## 开发注意（编码坑）
+
+这套脚本对文件编码很敏感，改动时请保持：
+
+| 文件 | 要求 | 原因 |
+|---|---|---|
+| `*.ps1` | **UTF-8 带 BOM** + CRLF | Windows PowerShell 5.1 无 BOM 时按 ANSI 读取，中文会变乱码并导致语法错误 |
+| `phone/*.sh` | UTF-8 无 BOM + **LF** | 设备上是 `/system/bin/sh`，CRLF 会让 `do`/`then` 解析失败 |
+| `主题工具.bat` | **纯 ASCII** + CRLF | cmd 按 OEM 代码页解析批处理，UTF-8 中文必乱码 |
+
+`.gitattributes` 已固定换行；`.bat` 保持 ASCII 是为了绕开代码页问题（用英文提示）。
+PowerShell 里没有 `utf8NoBOM` 枚举，需要无 BOM 时用：
+
+```powershell
+[System.IO.File]::WriteAllText($path, $text, (New-Object System.Text.UTF8Encoding($false)))
+```
+
+---
+
 ## 已知限制
 
 - 只处理 **ColorOS ROM 主题包**（根级 `themeInfo.xml` + 内嵌模块 zip）；
