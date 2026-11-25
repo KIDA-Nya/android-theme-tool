@@ -68,6 +68,7 @@ have_root() {
 MODE=apply
 NOLOCK=0
 DESKTOP=0
+LATEST=0
 THEME=""
 
 for a in "$@"; do
@@ -76,10 +77,18 @@ for a in "$@"; do
     --desktop)   DESKTOP=1 ;;
     --lock-only) MODE=lock ;;
     --status)    MODE=status ;;
+    --latest)    LATEST=1 ;;
     -h|--help)   MODE=help ;;
     *)           [ -z "$THEME" ] && THEME="$a" ;;
   esac
 done
+
+# --latest：自动取 Download 里最新的主题（供桌面小组件一键调用）
+if [ -z "$THEME" ] && [ "$LATEST" = "1" ]; then
+  THEME=$(ls -t /sdcard/Download/*.theme /sdcard/Download/*.hwt 2>/dev/null | head -1)
+  [ -z "$THEME" ] && die "Download 里没有找到 .theme 文件"
+  say "使用最新主题：$(basename "$THEME")"
+fi
 
 # ---------------------------------------------------------------- 状态
 
@@ -308,6 +317,27 @@ set_lock() {
   rm -rf "$work"
 }
 
+# ---------------------------------------------------------------- 选文件路径
+
+# 优先用 Termux:API 的原生文件选择器；不可用时手工输入路径
+pick_file() {
+  if command -v termux-storage-get >/dev/null 2>&1; then
+    OUT="$TMP/theme_picked.theme"
+    rm -f "$OUT" 2>/dev/null
+    termux-storage-get "$OUT" >/dev/null 2>&1
+    if [ -s "$OUT" ]; then
+      echo "$OUT"
+      return 0
+    fi
+  fi
+  # 提示必须写 stderr：本函数在 $( ) 里被调用，写 stdout 会污染返回值
+  printf "  输入主题文件完整路径: " >&2
+  read -r P
+  P=$(printf '%s' "$P" | sed 's/^["'\'']//; s/["'\'']$//')
+  [ -n "$P" ] && { echo "$P"; return 0; }
+  return 1
+}
+
 # ---------------------------------------------------------------- 交互式选主题
 
 pick_theme() {
@@ -330,12 +360,17 @@ pick_theme() {
     i=$((i + 1))
     printf "  [%d] %s\n" "$i" "$f"
   done < "$LIST"
+  echo "  [P] 选择其它位置的文件（手机文件选择器）"
   echo "  [0] 退出"
-  printf "  请输入序号: "
+  printf "  请输入序号或 P: "
   read -r sel
 
   case "$sel" in
     ''|0) THEME=""; return 1 ;;
+    [pP]*)
+      THEME=$(pick_file)
+      if [ -z "$THEME" ]; then THEME=""; return 1; fi
+      ;;
     *) THEME=$(sed -n "${sel}p" "$LIST") ;;
   esac
   [ -n "$THEME" ] && ok "已选择：$(basename "$THEME")"

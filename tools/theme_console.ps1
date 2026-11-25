@@ -27,6 +27,9 @@ $LOCK = Join-Path $here 'set_lock_wallpaper.ps1'
 $FILL = Join-Path $here 'push_modules.ps1'
 $CHECK = Join-Path $here 'check_theme.py'
 
+# 会话内指定的主题文件（菜单 [7] 设置，之后各操作优先用它）
+$script:ThemePath = ''
+
 function Line { param([string]$c = 'DarkGray') Write-Host ('-' * 62) -ForegroundColor $c }
 function Title { param([string]$t) Write-Host ''; Write-Host "  $t" -ForegroundColor Cyan; Line }
 function Ok { param([string]$t) Write-Host "  [OK] $t" -ForegroundColor Green }
@@ -69,6 +72,33 @@ function Pick-Device {
     return $null
 }
 
+function Select-ThemeFile {
+    <# 优先弹出 Windows 文件选择框；不可用（或输入被重定向）时退回手工输入 #>
+    if (-not [Console]::IsInputRedirected) {
+    try {
+        Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
+        $dlg = New-Object System.Windows.Forms.OpenFileDialog
+        $dlg.Title = '选择主题文件'
+        $dlg.Filter = 'ColorOS 主题 (*.theme;*.hwt)|*.theme;*.hwt|所有文件 (*.*)|*.*'
+        $dlg.CheckFileExists = $true
+        if ($script:LastPickDir -and (Test-Path -LiteralPath $script:LastPickDir)) { $dlg.InitialDirectory = $script:LastPickDir }
+        if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+            $script:LastPickDir = Split-Path $dlg.FileName -Parent
+            return $dlg.FileName
+        }
+        return $null
+    }
+    catch {
+        # 落到下面的手工输入
+    }
+    }
+
+    Info '请输入路径（可把文件拖进窗口）'
+    $p = (Read-Host '  主题文件路径').Trim('"', ' ')
+    if ($p -and (Test-Path -LiteralPath $p)) { return (Get-Item -LiteralPath $p).FullName }
+    return $null
+}
+
 function Get-LocalThemes {
     $result = @()
     foreach ($d in @($root, (Join-Path $root 'themes'), (Join-Path $root 'build'))) {
@@ -80,6 +110,11 @@ function Get-LocalThemes {
 }
 
 function Pick-Theme {
+    if ($script:ThemePath) {
+        if (Test-Path -LiteralPath $script:ThemePath) { return $script:ThemePath }
+        Warn2 "之前指定的路径已失效：$($script:ThemePath)"
+        $script:ThemePath = ''
+    }
     if ($Theme) {
         if (Test-Path -LiteralPath $Theme) { return (Get-Item -LiteralPath $Theme).FullName }
         Bad "找不到：$Theme"
@@ -99,8 +134,14 @@ function Pick-Theme {
         $f = $files[$i]
         Info ("[{0}] {1}   {2:N1} MB   {3:yyyy-MM-dd}" -f ($i + 1), $f.Name, ($f.Length / 1MB), $f.LastWriteTime)
     }
+    Info '[P] 选择其它位置的文件（弹出文件选择框）'
     Info '[0] 手动输入路径'
-    $sel = Read-Host '  请输入序号'
+    $sel = (Read-Host '  请输入序号或 P').Trim()
+    if ($sel -match '^[pP]$') {
+        $picked = Select-ThemeFile
+        if ($picked) { $script:ThemePath = $picked; Ok "已选择：$picked"; return $picked }
+        return $null
+    }
     $idx = 0
     if ([int]::TryParse($sel, [ref]$idx)) {
         if ($idx -eq 0) {
@@ -193,6 +234,18 @@ function Do-FillModules {
     Pause2
 }
 
+function Do-SetPath {
+    Title '指定主题文件'
+    Info '选好后，上面的「体检 / 应用 / 锁屏 / 补齐」都会直接用这个文件'
+    $picked = Select-ThemeFile
+    if ($picked) {
+        $script:ThemePath = $picked
+        Ok "已指定：$picked"
+    }
+    else { Info '已取消' }
+    Pause2
+}
+
 function Show-Help {
     Title '使用说明'
     Info '功能：把 .theme 主题应用到 ColorOS'
@@ -222,6 +275,7 @@ function Main-Menu {
         if ($ds.Count -gt 0) { Ok "已连接：$($ds[0])" } else { Warn2 '未连接设备（插线并授权 USB 调试）' }
         $files = Get-LocalThemes
         if ($files.Count -gt 0) { Info "本地主题：$($files.Count) 个" } else { Warn2 "本地主题：$root 下没有 .theme 文件" }
+        if ($script:ThemePath) { Ok "已指定：$(Split-Path $script:ThemePath -Leaf)" }
         Line
         Write-Host '   [1]  主题包体检（应用前建议先跑一次）'
         Write-Host '   [2]  应用主题（自动含锁屏壁纸）'
@@ -229,7 +283,8 @@ function Main-Menu {
         Write-Host '   [4]  查看当前主题状态'
         Write-Host '   [5]  恢复系统默认主题'
         Write-Host '   [6]  按内容补齐缺失模块（需 root）'
-        Write-Host '   [7]  使用说明'
+        Write-Host '   [7]  指定主题文件路径…'
+        Write-Host '   [8]  使用说明'
         Write-Host '   [0]  退出'
         Line
         $c = (Read-Host '   请输入序号').Trim()
@@ -240,7 +295,8 @@ function Main-Menu {
             '4' { Do-Status }
             '5' { Do-Revert }
             '6' { Do-FillModules }
-            '7' { Show-Help }
+            '7' { Do-SetPath }
+            '8' { Show-Help }
             '0' { return }
         }
     }

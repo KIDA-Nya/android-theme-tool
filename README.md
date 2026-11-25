@@ -67,13 +67,24 @@ $env:THEME_PYTHON = 'C:\Python312\python.exe'
 
 ---
 
-## 快速开始（电脑端）
+## 快速开始
+
+> 完整步骤、场景与排错见 **[docs/USAGE.md](docs/USAGE.md)**（使用手册）。
+
+### 一键：把主题拖到图标上
+
+把 `.theme` 文件拖到 `主题工具.bat` 上松手即可，剩下的全自动。
+
+### 电脑端（菜单）
 
 ```powershell
-# 1) 手机开 USB 调试并授权
-adb devices
+adb devices                       # 先确认设备已授权
+# 双击「主题工具.bat」，不要带参数
+```
 
-# 2) 双击「主题工具.bat」，或用命令行
+### 电脑端（命令行）
+
+```powershell
 Set-ExecutionPolicy -Scope Process Bypass -Force
 .\tools\apply_local_theme.ps1 -Theme '.\你的主题.theme'
 ```
@@ -131,7 +142,12 @@ theme
 ```
 
 `setup.sh` 会装好 Shizuku 的 `rish`、生成 `theme` 命令、配好 PATH。
-没有 root 也能用（`rish` 就是 shell 身份）。详见 [docs/PHONE.md](docs/PHONE.md)。
+没有 root 也能用（`rish` 就是 shell 身份）。
+
+想更进一步：装 `Termux:Widget` 后把 `phone/widget.sh` 放进 `~/.shortcuts/`，
+桌面放个小组件，**点一下就应用最新主题**（见 [docs/USAGE.md](docs/USAGE.md) 第 5 节）。
+
+详见 [docs/PHONE.md](docs/PHONE.md)。
 
 ---
 
@@ -167,11 +183,13 @@ theme
 │  └─ newuuid.py           换 UUID（强制重应用）
 ├─ phone/
 │  ├─ theme.sh             手机端主脚本
-│  └─ setup.sh             Termux 一次性安装
+│  ├─ setup.sh             Termux 一次性安装
+│  └─ widget.sh            Termux:Widget 桌面小组件入口
 ├─ lockwall/               LockWall 源码（壁纸小工具）
 └─ docs/
    ├─ ANALYSIS.md          完整逆向分析
    ├─ ADB.md               纯 adb 最小流程与排错
+   ├─ USAGE.md             使用手册（四种一键方式 + 场景 + 排错）
    └─ PHONE.md             手机端说明
 ```
 
