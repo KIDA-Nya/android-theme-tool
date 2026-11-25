@@ -177,7 +177,9 @@ theme
 │  ├─ build-lockwall.ps1   构建 LockWall APK
 │  ├─ common.ps1           共享函数（adb/python 探测、安全执行、解冻）
 │  ├─ adb-apply.sh         纯 adb 投递（无 PowerShell / 无 Python 依赖）
-│  ├─ probe.ps1            兼容性探测（换机型先跑这个）
+│  ├─ probe.ps1            兼容性探测 / 适配器选择（换机型先跑这个）
+│  ├─ check_package.ps1    统一包体检（.theme/.mtz/.hwt 自动选适配器）
+│  ├─ adapters/            品牌适配器（coloros 可写入；miui/emui 只读）
 │  ├─ theme_align.py       补全模块声明
 │  ├─ check_theme.py       应用前体检
 │  ├─ extract_keyguard.py  提取锁屏壁纸
@@ -187,6 +189,7 @@ theme
 │  ├─ setup.sh             Termux 一次性安装
 │  └─ widget.sh            Termux:Widget 桌面小组件入口
 ├─ lockwall/               LockWall 源码（壁纸小工具）
+├─ tests/                  无真机回归（合成 mtz/hwt 夹具）
 └─ docs/
    ├─ ANALYSIS.md          完整逆向分析
    ├─ ADB.md               纯 adb 最小流程与排错
@@ -227,8 +230,14 @@ theme --probe              # 手机端
 ```
 
 它会逐项检查主题商店服务、权限、uxdesign、`/data/theme`、冻结控制等，
-并标注**平台识别**与**适配器**（ColorOS 已实现，MIUI/EMUI 未实现），
+并标注**平台识别**与**适配器**（ColorOS 可写入，MIUI/EMUI 只读），
 给出「完全可用 / 有降级 / 不可用」的判定。
+
+包体检（`.theme` / `.mtz` / `.hwt` 都支持，按平台自动选适配器）：
+
+```powershell
+.\tools\check_package.ps1 -Path '.\xxx.theme'
+```
 
 想了解能不能扩展到小米/华为，见 [docs/UNIVERSAL.md](docs/UNIVERSAL.md)；
 机型细节见 [docs/PORTABILITY.md](docs/PORTABILITY.md)。

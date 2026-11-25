@@ -102,7 +102,36 @@ verify(expectedId) -> { ok, evidence{} }
 
 ---
 
-## 五、已有社区工具（避免重复造轮子）
+## 五、实现进度（v2.0.0）
+
+适配器契约已落到代码，不再只是设想：
+
+| 文件 | 作用 |
+|---|---|
+| `tools/adapters/_registry.ps1` | 注册表：加载、探测、选择适配器 |
+| `tools/adapters/coloros.ps1` | 探测 + 包体检 + **写入**（委托给 apply_local_theme.ps1） |
+| `tools/adapters/miui.ps1` | 探测 + `.mtz` 包体检（**只读**） |
+| `tools/adapters/emui.ps1` | 探测 + `.hwt` 包体检（**只读**） |
+| `tools/adapters/_template.ps1` | 新品牌模板（契约说明） |
+| `tools/check_package.ps1` | 统一入口：按扩展名/描述文件选适配器做体检 |
+| `tests/run_tests.ps1` | 无真机回归：合成 mtz/hwt 夹具 + 真实 .theme |
+
+`probe.ps1` 现在是适配器选择器，输出形如：
+
+```
+[OK] 平台识别   coloros
+[OK] 适配器    coloros（可写入）
+```
+
+未实现写入的平台会明确显示「只读」，`Apply` 脚本块直接抛错，不会假装成功。
+
+**验证情况**：ColorOS 侧在真机端到端验证；MIUI / EMUI 侧只有合成夹具验证
+（`tests/run_tests.ps1` 6 项全过），**没有真机** —— 所以那两个 `TestPlatform`
+只保证"不误报"，不保证真机命中。
+
+---
+
+## 六、已有社区工具（避免重复造轮子）
 
 | 项目 | 作用 | 与本项目的关系 |
 |---|---|---|
@@ -114,7 +143,7 @@ verify(expectedId) -> { ok, evidence{} }
 
 ---
 
-## 六、可行性结论
+## 七、可行性结论
 
 | 问题 | 回答 |
 |---|---|
@@ -129,7 +158,7 @@ verify(expectedId) -> { ok, evidence{} }
 
 ---
 
-## 七、下一步（如果要继续）
+## 八、下一步（如果要继续）
 
 1. 把现有 ColorOS 逻辑抽成 `adapters/coloros.ps1`，`apply_local_theme.ps1` 只做参数与调度
 2. 加 `adapters/_template.ps1` 作为新品牌模板

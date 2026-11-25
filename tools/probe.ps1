@@ -87,17 +87,24 @@ Add-Row 'ro.oplus.theme.version' $(if ($ver) { $ver } else { '（空）' }) $(if
 $cur = ((Invoke-Adb @('shell', 'settings get global applied_default_theme_package_name')) | Out-String).Trim()
 Add-Row '当前主题 UUID' $(if ($cur -and $cur -ne 'null') { $cur } else { '（未设置）' }) 'INFO'
 
-# ---------------------------------------------------------------- 平台识别
-$pkgs = ((Invoke-Adb @('shell', 'pm list packages')) | Out-String)
-$stack = 'unknown'
-$adapter = '（无）'
+# ---------------------------------------------------------------- 平台识别（走适配器注册表）
+. (Join-Path $PSScriptRoot 'adapters\_registry.ps1')
+$catalog = @(Get-AdapterCatalog)
+$hit = $catalog | Where-Object { $_.Present } | Select-Object -First 1
 
-if ($store) { $stack = 'coloros'; $adapter = 'coloros（已实现）' }
-elseif ($pkgs -match 'com\.android\.thememanager|com\.miui\.themestore') { $stack = 'miui'; $adapter = 'miui（未实现）' }
-elseif ($pkgs -match 'com\.huawei\.android\.thememanager|com\.hihonor\..*thememanager') { $stack = 'emui'; $adapter = 'emui（未实现）' }
+$stack = if ($hit) { $hit.Name } else { 'unknown' }
+$adapterText = if ($hit) {
+    "{0}（{1}）" -f $hit.Name, $(if ($hit.SupportsApply) { '可写入' } else { '只读' })
+} else { '（无匹配适配器）' }
 
-Add-Row '平台识别' $stack $(if ($stack -eq 'coloros') { 'OK' } elseif ($stack -eq 'unknown') { 'FAIL' } else { 'WARN' })
-Add-Row '适配器' $adapter $(if ($stack -eq 'coloros') { 'OK' } else { 'INFO' })
+Add-Row '平台识别' $stack $(if ($hit) { 'OK' } else { 'FAIL' })
+Add-Row '适配器' $adapterText $(if ($hit -and $hit.SupportsApply) { 'OK' } else { 'INFO' })
+
+foreach ($c in $catalog) {
+    if (-not $c.Present) { continue }
+    if ($hit -and $c.Name -eq $hit.Name) { continue }
+    Add-Row ("其他平台/{0}" -f $c.Name) (($c.Evidence | Select-Object -First 2) -join '; ') 'INFO'
+}
 
 # ---------------------------------------------------------------- uxdesign
 $ux = ((Invoke-Adb @('shell', 'pm list packages com.oplus.uxdesign')) | Out-String)

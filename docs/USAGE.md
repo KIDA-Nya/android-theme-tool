@@ -26,6 +26,14 @@
 - Python 3.8+：只影响「模块声明对齐」，没有也能跑（图标可能不生效）；或设 `THEME_PYTHON`
 - root **不需要**。有 root 会更稳（自动解冻进程、核对模块）
 
+**应用前先体检包**（`.theme` / `.mtz` / `.hwt` 通吃）
+
+```powershell
+.\tools\check_package.ps1 -Path '.\你的主题.theme'
+```
+
+会按平台自动选适配器，检查描述文件、版本门禁、声明与内容是否一致。
+
 **换机型/换 ROM 先探测**
 
 ```powershell

@@ -168,25 +168,27 @@ function Initialize-Device {
       完成设备侧准备：选设备、探 root、取应用 uid、就绪时投放解冻脚本。
       返回 $true 表示拿到 root（可选能力），$false 表示只能走 shell 身份。
     #>
-    param([string]$Device = '', [string]$AppPackage = '')
+    param([string]$Device = '', [string]$AppPackage = '', [switch]$Quiet)
 
     Select-Device $Device | Out-Null
-    Write-Info "设备: $($script:Device)"
+    if (-not $Quiet) { Write-Info "设备: $($script:Device)" }
 
     $store = Resolve-ThemeStore
     if (-not $AppPackage) { $AppPackage = $store.Package }
-    Write-Info "主题商店: $($store.Package)"
-    Write-Info "服务组件: $($store.Service)"
+    if (-not $Quiet) {
+        Write-Info "主题商店: $($store.Package)"
+        Write-Info "服务组件: $($store.Service)"
+    }
 
     $isRoot = Test-Root
     if ($isRoot) {
         $script:AppUid = Get-AppUid $AppPackage
         Initialize-Unfreeze $AppPackage
         $how = if ($script:SuCmd -eq '') { 'adb shell 已是 root' } else { $script:SuCmd }
-        Write-Ok "root 可用（$how），$AppPackage uid=$($script:AppUid)"
+        if (-not $Quiet) { Write-Ok "root 可用（$how），$AppPackage uid=$($script:AppUid)" }
     }
     else {
-        Write-Warn2 '没有 root：以 shell 身份运行（投递服务仍可成功，但无法解冻/写 /data/theme）'
+        if (-not $Quiet) { Write-Warn2 '没有 root：以 shell 身份运行（投递服务仍可成功，但无法解冻/写 /data/theme）' }
     }
     return $isRoot
 }
