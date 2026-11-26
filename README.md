@@ -1,147 +1,85 @@
 # Android 主题工具
 
-> 把手上的 `.theme` / `.mtz` / `.hwt` / `.itz` **真正装进手机**——不是解包看看，是让系统认。
-> 一个命令，按你的机型自动选路径。
+手上攒了一堆 `.theme` 文件，都是别人做的、商店里搜不到的主题。手机是 ColorOS 16，商店只认它自己那套流程——文件塞进手机，点开、给权限、然后没反应。
 
-[![release](https://img.shields.io/github/v/release/KIDA-Nya/android-theme-tool?label=release)](https://github.com/KIDA-Nya/android-theme-tool/releases)
-[![license](https://img.shields.io/github/license/KIDA-Nya/android-theme-tool)](LICENSE)
-![platforms](https://img.shields.io/badge/platforms-ColorOS%20%7C%20HyperOS%20%7C%20MagicOS%20%7C%20OriginOS-1f6feb)
-![verified](https://img.shields.io/badge/%E5%AE%9E%E6%9C%BA%E9%AA%8C%E8%AF%81-OnePlus%209%20Pro%20%C2%B7%20ColorOS%2016-2ea043)
-![no-resign](https://img.shields.io/badge/%E4%B8%8D%E6%94%B9%E5%8C%85-%E4%B8%8D%E9%87%8D%E7%AD%BE-brightgreen)
+折腾了几天，撞了几堵墙，最后发现商店自己留了个口子：它有个导出的服务，谁拿到 shell 权限就能调。于是有了这个东西。
+
+现在一条命令：
 
 ```powershell
-# 就这一条：自动识别机型，ColorOS 直接应用，其它平台自动转「交给商店」
-.\tools\theme_cli.ps1 apply -Theme .\你的主题.theme
+.\tools\theme_cli.ps1 apply -Theme .\主题.theme
 ```
 
----
-
-## 为什么会有这个项目
-
-网上教人换主题的帖子，基本都卡在同一个地方：**主题商店不认你手上的包**。
-
-已经试过、并且能证明走不通的路：
-
-| 常见做法 | 为什么不行 |
-|---|---|
-| 写个 App 去投递 | 主题服务要 `signature` 级权限，普通 App 拿不到 |
-| 改 dex 后重签 | 换签名会**丢掉全部签名权限**，装上反而更用不了（实测：`OPPO_COMPONENT_SAFE` 等 5 个权限全丢） |
-| 直接往 `/data/theme` 拷文件 | 目录属主是系统组件，拷进去商店**不认这是"已应用"** |
-| 手写商店数据库记录 | 记录在 App 私有数据库，`Android/data` 下那堆只是备份镜像 |
-
-本项目的做法是**找系统自己的入口**：用 shell 身份调商店导出的投递服务，
-等于替你点了「应用」。原版商店不动、签名不动、不装框架。
+它会先看你的机型。ColorOS 就直接把包装进系统，等于替你点了「应用」。小米、华为、荣耀、vivo 这些没对外开放接口的，它就退一步：把文件放到商店能扫到的位置，再告诉你去点哪几下。
 
 ---
 
-## 30 秒上手
+## 走过的死路，省你几天
 
-**需要**：手机开 USB 调试 + 装了 `adb`；Python 3.8+（只用于模块声明对齐）；root 可选。
+**改 dex 再重签。** 装得上，但签名一换，`OPPO_COMPONENT_SAFE` 这类签名级权限全丢了。我实测丢了五个，服务直接拒绝——比不改还糟。这条最能坑人，因为网上教程都这么说。
 
-```powershell
-.\tools\theme_cli.ps1 status                   # 先看看认不认得你的手机
-.\tools\theme_cli.ps1 check  -Theme .\x.theme  # 应用前体检（推荐）
-.\tools\theme_cli.ps1 apply  -Theme .\x.theme  # 应用
-```
+**直接往 `/data/theme` 拷文件。** 目录确实能写进去（有 root 的话），但商店不认这是"已应用"，图标和壁纸一个都不会变。
 
-不想敲命令？双击 `主题工具.bat`，或者把主题文件**拖到 bat 图标上**松手。
+**照网上说的手写商店的数据库记录。** 我按转换工具的格式造了一份，字节都对得上，推回去重启商店——列表还是那三个自带主题。后来才搞明白：记录在 App 私有库里，`Android/data` 下面那些文件只是备份镜像。
+
+**装 LSPosed 去 Hook。** 这条路能用，但要装框架、要重启，而且部分机型上 Shizuku 的依赖还取不到。为了换个主题装一整套框架，我觉得不划算。
 
 ---
 
-## 支持哪些系统
+## 现在到什么程度
 
-| 平台 | 包格式 | 能做到 | 验证状态 |
-|---|---|---|---|
-| **ColorOS**（OPPO / 一加 / realme） | `.theme` | **整包应用**、混搭、子集、快照恢复 | ✅ 真机多次 + 重启 |
-| **MIUI / HyperOS**（小米 / Redmi / POCO） | `.mtz` | 探测 + 体检 + 免 root 注入 Theme backup | ⚠️ 未真机 |
-| **EMUI / HarmonyOS**（华为） | `.hwt` | 探测 + 体检 + 放 `Huawei/Themes` 交给商店 | ⚠️ 未真机 |
-| **MagicOS**（荣耀） | `.hwt` / `.hnt` | 同上（第三方主题建议用鸿蒙 `.hwt`） | ⚠️ 未真机 |
-| **OriginOS**（vivo / iQOO） | `.itz` | 探测 + 体检 + 放 Download 交 i主题 | ⚠️ 未真机 |
+ColorOS 这条是真跑通的。一加 9 Pro，ColorOS 16，商店 17.11.7，uxdesign 16.1.3。反复应用过几次，UUID 切过去了、七个模块都落了盘，重启三次、放着十三个小时，主题都还在。
 
-> 诚实标注：**只有 ColorOS 这条是实机验证过的**。其余平台是「按已知机制实现 + 有单元测试」，
-> 没有真机跑过。每个平台的依据和边界都写在 [docs/BRANDS.md](docs/BRANDS.md)。
+它还带几个我给自己加的功能：混搭（从多个主题各取一个模块拼成一个包）、只应用其中几个模块、应用前先快照一份 `/data/theme`，翻车了能退回去。这些都在 `theme_cli.ps1` 里，`status` 能看到当前状态。
 
----
+其它三个平台我只能说实话——**代码写了、单元测试有、没在真机上跑过**：
 
-## 不只是"能应用"
+- 小米 / 澎湃：没有对外的整包接口，只能探测、体检，外加一条改商店自己「Theme backup」的免 root 路子（有单测，没真机）
+- 华为：`.hwt` 放到 `Huawei/Themes`，让商店自己扫
+- 荣耀：第三方主题要用鸿蒙的 `.hwt`，按 MagicOS 版本选，别用官方编辑器导出的 `.hnt`
+- vivo：`.itz` 放到手机里，走 i主题 的「本地主题」
 
-| 能力 | 命令 | 说明 |
-|---|---|---|
-| 混搭 | `-Mix icons:别的.theme` | 从多个主题各取模块拼一个包，其它模块保持不变 |
-| 子集 | `-Only icons,wallpaper` | 只留指定模块，其余回系统默认 |
-| 备份 / 恢复 | `-Backup` / `-Restore` | 快照 `/data/theme`，翻车能回滚 |
-| 换 UUID | `tools/newuuid.py` | 系统按 UUID 判"已是当前主题"，换掉才能强制重应用 |
-| 包体检 | `check_package.ps1` | `.theme/.mtz/.hwt/.itz` 通吃，跨平台 |
-| 资源提取 | `extract_assets.py` | 把壁纸/图标/字体/铃声从包里拆出来（三平台通用） |
-| 稳定性观察 | `watch_theme.ps1 -Reboot` | 采样 UUID/模块，验证会不会被系统改回去 |
+这些平台的具体依据、边界、为什么做不到更多，都在 `docs/BRANDS.md` 和 `docs/VENDOR-FINDINGS.md` 里。我没打算把它们包装成"已支持"。
 
 ---
 
-## 这些坑我都踩过，所以内置了处理
+## 用之前值得知道
 
-| 现象 | 真因 | 处理 |
-|---|---|---|
-| 图标不变 | 主题里有 `icons/` 但 `themeInfo.xml` 没声明 | 应用前自动扫描 zip 补全声明 |
-| 卡住没反应 | ColorOS 冻结了 `:applyTheme` 进程 | 持续解冻 cgroup + 备份/还原系统设置 |
-| 重复应用毫无反应 | UUID 没变，系统判定"已是当前主题" | 换 UUID，或先切回默认 |
-| 锁屏没变 | 图片放在 `/data/local/tmp`，应用读不到 | 改投应用私有目录（这个坑踩了两次） |
-| `EditorVersion` 不符 | 主题与系统版本不匹配 | 体检直接报出来 |
+**需要**：手机的 USB 调试打开、电脑上有 `adb`。对齐模块声明要用 Python 3.8+，没有也能跑，只是图标可能不生效。root 是可选的，有的话更稳（能自动解冻进程、能快照备份）。
 
-### ⚠️ 安全提醒（MIUI 用户必读）
+**双击也能用**：`主题工具.bat`，或者把主题文件直接拖到它图标上松手。
 
-主题作者的官方教程明确写着：
+**小米用户先看这条**。主题作者的官方教程里写着：MIUI 11/12/12.5 必须用 2026-01-11 之后出的主题包，否则**可能开不了机**；MIUI 12/12.5 用 MIUI 13 以上的主题会无限重启，作者标了 100% 复现。这条我原来不知道，看到之后加进了体检——`check_package.ps1` 会读你的 MIUI 版本和包内文件时间，命中就红字拦住。
 
-> MIUI 11/12/12.5 必须用 **2026-01-11 之后**的主题包，否则**可能导致设备无法开机**；
-> MIUI 12/12.5 套用 MIUI 13+ 的主题会**无限重启（100% 复现）**。
+---
 
-`check_package.ps1` 已经内置这条检查，命中会红字警告。**别跳过体检。**
+## 踩过的坑（都已经写进代码）
+
+**图标不变。** 多半是主题里有 `icons/` 但 `themeInfo.xml` 里没声明。商店按声明走，没声明就当没有。现在应用前会扫一遍 zip 把声明补全。
+
+**卡住不动，日志里也没有 `apply success`。** ColorOS 把 `:applyTheme` 那个进程冻住了。脚本会持续把对应 uid 的 cgroup.freeze 写 0，同时把你原来的设置备份下来，结束时还原。
+
+**同一个主题再应用一次，完全没反应。** 系统按 UUID 判断"已经是这个主题了"，直接跳过。换个 UUID 就行，`tools/newuuid.py` 干这个。
+
+**锁屏壁纸一直不换。** 这个坑我踩了两次。第一次是把图放在 `/data/local/tmp`，应用读不到；第二次是换了日志文案之后，脚本里检测「有没有回退到内置图」的字符串忘了改，于是每次都报成功，其实锁屏纹丝没动。最后用像素比对才确认下来——现在校验就是拿系统里那张图和源图比，差 0 就说明真写进去了。
 
 ---
 
 ## 文档
 
-| 文档 | 内容 |
-|---|---|
-| [docs/USAGE.md](docs/USAGE.md) | 使用手册：五种上手方式、场景对照、排错、回滚 |
-| [docs/BRANDS.md](docs/BRANDS.md) | 品牌/子品牌矩阵（realme、Redmi、iQOO、荣耀、魅族、三星…） |
-| [docs/VENDOR-FINDINGS.md](docs/VENDOR-FINDINGS.md) | 对 MIUI / 华为 / vivo 的真包实测记录 |
-| [docs/ANALYSIS.md](docs/ANALYSIS.md) | ColorOS 的完整逆向分析（含被证伪的方案） |
-| [docs/STABILITY.md](docs/STABILITY.md) | 长期稳定性：谁会把你主题改回去 |
-| [docs/GUIDE-COMPARISON.md](docs/GUIDE-COMPARISON.md) | 与社区主流教程的逐平台对照 |
-| [docs/ADB.md](docs/ADB.md) | 只用 4 条 adb 命令的最小流程 |
+- `docs/USAGE.md` — 怎么用，五种上手方式，排错，回滚
+- `docs/BRANDS.md` — 各品牌和子品牌（realme、Redmi、iQOO、荣耀、魅族、三星）到底用哪套主题栈
+- `docs/VENDOR-FINDINGS.md` — 为了搞清 MIUI 和华为，我拆了它们的安装包得出的结论
+- `docs/ANALYSIS.md` — ColorOS 那条链路的完整逆向过程，包括被证伪的方案
+- `docs/STABILITY.md` — 谁会把你的主题改回去，以及怎么自己验
+- `docs/ADB.md` — 只要 4 条 adb 命令的极简版
 
 ---
 
-## 环境要求
+## 最后
 
-- **adb**：装 [Platform Tools](https://developer.android.com/tools/releases/platform-tools)，或设 `THEME_ADB` 指向它
-- **Python 3.8+**：只影响「模块声明对齐」，没有也能跑（图标可能不生效）；或设 `THEME_PYTHON`
-- **root**：可选。有 root 更稳（自动解冻、快照备份、核对模块）
-- **PowerShell 5.1 / 7+**（Windows）；手机端另有 Termux 脚本
+这东西只处理 ROM 主题包（ColorOS 的 `.theme`、小米的 `.mtz`、华为的 `.hwt`、vivo 的 `.itz`）。商店下载下来那种 `resources/ descriptions/ previews/` 结构的包走的是另一条通道，我还没做。
 
----
+平板和折叠屏、海外版 ROM，上游教程都标了不适配，我也没验过。
 
-## 已知限制
-
-- 只处理 **ROM 主题包**（ColorOS `.theme` / MIUI `.mtz` / 华为 `.hwt` / vivo `.itz`）；
-  商店下载的 inner 格式（`resources/ descriptions/ previews/ keys/`）走另一条通道，不支持
-- ColorOS 只能整包或按模块子集应用，**不能只换字体/铃声**（那是另一条通道）
-- 平板 / 折叠屏：上游教程标注不适配，本项目同样未验证
-- 海外 ROM：未验证（上游教程仅覆盖中国大陆版）
-
----
-
-## 免责声明
-
-- 仅供**个人在自有设备**上使用自己拥有或获授权的主题资源
-- 主题、壁纸、图标的著作权归原作者；请勿二次分发或商用
-- 修改系统主题属非官方操作，请自行备份。使用风险自负
-
-## License
-
-[MIT](LICENSE)
-
----
-
-**如果这个项目帮你把主题装进去了**，点个 ⭐ 能让更多同样卡住的人搜到它——
-这个领域的中文资料太散了，多一个人看到就少一个人踩「重签丢权限」那个坑。
+MIT 协议，随便用。如果它帮你省了几个小时，点个 star 就行——这领域的中文资料太散，多一个人看到，就少一个人去试"重签"那条路。
