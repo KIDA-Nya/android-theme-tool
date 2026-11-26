@@ -77,6 +77,37 @@ $env:THEME_PYTHON = 'C:\Python312\python.exe'
 
 ---
 
+## 一个命令走天下（多系统适配）
+
+不用记每个品牌该用哪个脚本，`theme_cli.ps1` 会按当前设备**自动选路径**：
+
+```powershell
+.\tools\theme_cli.ps1 status                   # 看平台与当前主题
+.\tools\theme_cli.ps1 check -Theme .\x.hwt    # 包体检（任何平台）
+.\tools\theme_cli.ps1 apply -Theme .\x.theme  # ColorOS 真投递；其它平台自动转为「交给商店」
+.\tools\theme_cli.ps1 route -Theme .\x.mtz    # 强制走「交给商店」
+.\tools\theme_cli.ps1 backup                   # 仅 ColorOS
+.\tools\theme_cli.ps1 watch -Minutes 30        # 稳定性观察
+```
+
+`apply` 的行为随平台变化：
+
+| 平台 | `apply` 实际做什么 |
+|---|---|
+| ColorOS | 直接投递 `ThemeApplyService`（真的应用） |
+| MIUI / 华为 / 荣耀 / vivo | 推包到商店能扫到的位置 + 拉起商店 + 告诉你点哪几步 |
+
+## 打包分发
+
+```powershell
+.\tools\build-package.ps1 -Version v5.0.0
+```
+
+产物 `dist/android-theme-tool-v5.0.0.zip`，只含脚本与文档
+（不含主题样本、APK、密钥、第三方壁纸），并打印 SHA256。
+
+---
+
 ## 快速开始
 
 > 完整步骤、场景与排错见 **[docs/USAGE.md](docs/USAGE.md)**（使用手册）。
