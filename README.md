@@ -227,6 +227,7 @@ theme
    ├─ VENDOR-FINDINGS.md   MIUI / EMUI / vivo 的真实包实测记录
    ├─ BRANDS.md            品牌与子品牌支持矩阵
    ├─ GUIDE-COMPARISON.md  与社区官方教程的对照（含差异与本项目的边界）
+   ├─ STABILITY.md         长期稳定性：各平台可能回滚的机制与实测数据
    └─ PHONE.md             手机端说明
 ```
 
