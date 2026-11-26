@@ -358,3 +358,79 @@ DrmService: downloadRights, resultCode=413
 
 ---
 
+## 九、小米主题商店自己是怎么「投递」的
+
+反编译 `com.android.thememanager` 11.5.3.1 + MIUI framework 源码
+（[Fklearn/XiaomiFramework · ThemeRuntimeManager.java](https://github.com/Fklearn/XiaomiFramework/blob/master/mi2s_10_miui12/src/main/java/miui/content/res/ThemeRuntimeManager.java)）
+得到的完整链路：
+
+```
+Themes 进程（com.android.thememanager，普通应用 uid）
+  │
+  ├─ 1) DRM 校验        DrmManager.isLegal(ctx, contentFile, rightsFile)
+  │       必须等于 DrmResult.DRM_SUCCESS 才继续，否则弹「下载权利失败」
+  │
+  ├─ 2) 备份当前主题    TrialBackupManager.n(...)
+  │
+  ├─ 3) 解包/准备资源   ApplyThemeTask → ThemeApplyUtils / ThemeFileUtils / ThemeZipFile
+  │
+  ├─ 4) 交给系统服务    ThemeRuntimeManager.bindService()
+  │       context.getSystemService("security")        ← MIUI 的 security 服务
+  │       再通过反射调用它的方法：
+  │         saveIcon(String, Bitmap)
+  │         setTheme / setThemeRes / setThemeType / setThemeUsingType
+  │         markGadgetUpdated / restoreDefault
+  │
+  ├─ 5) 系统进程写盘    system_server（system uid）写：
+  │         /data/system/theme/wallpaper
+  │         /data/system/theme/lock_wallpaper
+  │         /data/system/theme/boots/bootanimation.zip
+  │         /data/system/theme/{fonts,lockscreen,icons,...}
+  │         /data/system/theme/config.config
+  │         /data/system/theme_magic/tempIcon/   （临时图标）
+  │
+  └─ 6) 通知全系统重载  ThemeResources.getSystem().resetIcons()
+                        broadcast miui.intent.action.ACTION_THEME_CHANGED
+                        （另有 ACTION_MMS_THEME_CHANGED）
+```
+
+### 关键点：商店自己也不是 root
+
+`ThemeRuntimeManager.bindService()` 里这一行说明了一切：
+
+```java
+this.mSecurityManager = this.mContext.getSystemService("security");
+...
+Method method = Method.of(this.mSecurityManager.getClass(), "saveIcon",
+                           Void.TYPE, new Class[]{String.class, Bitmap.class});
+method.invoke(this.mSecurityManager.getClass(), this.mSecurityManager, new Object[]{fileName, icon});
+```
+
+**它没有直接写 `/data/system/theme`**——那是 root 权限。它把动作交给 system_server 里的
+`security` 服务（以 `system` uid 运行），由后者完成特权写盘。
+
+这解释了三件事：
+
+1. **为什么第三方 App 抄不了**：`security` 服务的调用受系统级权限约束，
+   普通 App、`shell`(uid 2000) 都过不去（第八节的四条门）。
+2. **为什么 MIUI 备份能行**：`com.miui.backup` 是系统应用（`android.uid.backup`），
+   它恢复时用的是它自己的系统权限，不是我们的。
+3. **为什么"root 就行"是误解**：root 能写盘，但应用主题前那道 `DrmManager.isLegal`
+   仍需绕过——那台机器靠的是 LSPosed CorePatch。
+
+### 与 ColorOS 的对照
+
+| 环节 | ColorOS | MIUI |
+|---|---|---|
+| 谁发起 | 商店进程（`ThemeApplyService`） | 商店进程（`ApplyThemeTask`） |
+| 校验 | `EditorVersion` 版本比对 | `DrmManager.isLegal` 内容 DRM |
+| 交给谁执行 | `com.oplus.uxdesign`（`UxThemeService`，AIDL） | system_server 的 `security` 服务 |
+| 外部能否触发 | ✅ 服务 exported，shell 有权限 | ❌ 服务不可达，shell 无权限 |
+| 落点 | `/data/theme/` | `/data/system/theme/` |
+| 通知 | uxdesign 内部重载 | `ACTION_THEME_CHANGED` 广播 |
+
+结构上两家是**同一个套路**：应用进程只做校验与准备，真正写盘交给系统特权进程。
+差别只在**入口是否对外开放**——ColorOS 开放了，MIUI 没有。
+
+---
+
