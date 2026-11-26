@@ -489,6 +489,10 @@ if ($ok) {
     }
     Write-Host ''
     Write-Ok '应用成功。'
+    Write-Host ''
+    Write-Info '提示：投递成功不等于不会被回滚。若系统过一会儿自己变回默认主题，'
+    Write-Info '      需要停用/冻结主题商店（社区称「停用法 / 冻结法」），'
+    Write-Info '      详见 docs/GUIDE-COMPARISON.md'
 }
 else {
     Write-Host ''

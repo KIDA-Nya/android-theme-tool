@@ -226,6 +226,7 @@ theme
    ├─ UNIVERSAL.md         跨品牌通用策略调研与适配器架构
    ├─ VENDOR-FINDINGS.md   MIUI / EMUI / vivo 的真实包实测记录
    ├─ BRANDS.md            品牌与子品牌支持矩阵
+   ├─ GUIDE-COMPARISON.md  与社区官方教程的对照（含差异与本项目的边界）
    └─ PHONE.md             手机端说明
 ```
 

@@ -73,6 +73,9 @@ function Get-EmuiAdapter {
             }
             elseif ($ext -eq '.hnt') {
                 $info['Edition'] = 'Honor (.hnt)'
+                # 依据 theme 作者的官方教程：.hnt 是荣耀主题编辑器的导出格式，
+                # 第三方主题应当用鸿蒙 .hwt 并按 MagicOS 版本选
+                $info['Hint'] = '荣耀第三方主题建议用鸿蒙 .hwt 并按 MagicOS 版本选择；.hnt 是官方编辑器导出格式'
             }
             elseif ($ext -eq '.hwt') {
                 $info['Edition'] = 'Huawei (.hwt)'
@@ -131,9 +134,16 @@ function Get-EmuiAdapter {
                 $locks = @($names | Where-Object { $_ -match '^unlock/.+\.xml$' })
                 if ($locks.Count -gt 0) { $info['LockscreenXml'] = @($locks | Select-Object -First 3) }
 
+                # 华为 / 荣耀 / 鸿蒙 的版本对应关系（来自 theme 作者教程）
+                $map = @{
+                    'MagicUI' = '鸿蒙 2'; 'MagicOS 7' = '鸿蒙 2'; 'MagicOS 8' = '鸿蒙 3'
+                    'MagicOS 9' = '鸿蒙 4'; 'MagicOS 10' = '鸿蒙 4'; 'MagicOS 11' = '待确认'
+                }
+                $info['VersionMap'] = 'MagicUI/MagicOS7→鸿蒙2；MagicOS8→鸿蒙3；MagicOS9/10→鸿蒙4'
+
                 return @{
                     Ok       = ($problems.Count -eq 0)
-                    Kind     = '华为主题包（.hwt，只读体检）'
+                    Kind     = '华为 / 荣耀主题包（.hwt / .hnt，只读体检）'
                     Problems = @($problems)
                     Info     = $info
                 }

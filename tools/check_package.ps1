@@ -66,7 +66,7 @@ Write-Host ("  类型: {0}" -f $r.Kind)
 if ($r.Info -and $r.Info.Count -gt 0) {
     Write-Host ''
     Write-Host '  关键字段:' -ForegroundColor Cyan
-    foreach ($k in @('Root', 'Edition', 'Summary', 'Uuid', 'EditorVersion', 'title', 'title-cn', 'author', 'version', 'screen', 'RootNote')) {
+    foreach ($k in @('Root', 'Edition', 'Summary', 'Uuid', 'EditorVersion', 'title', 'title-cn', 'author', 'version', 'screen', 'RootNote', 'VersionMap', 'Hint')) {
         if ($r.Info.ContainsKey($k) -and $r.Info[$k]) { Write-Host ("    {0,-14} {1}" -f $k, $r.Info[$k]) -ForegroundColor Gray }
     }
     foreach ($k in @('Modules', 'KnownModules', 'TopLevel', 'Declared', 'LockscreenXml')) {

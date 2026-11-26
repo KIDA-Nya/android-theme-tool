@@ -101,8 +101,10 @@ switch ($Platform) {
         Write-Info '  1) 荣耀主题 App → 我的 → 主题'
         Write-Info '  2) 找到刚放进去的主题 → 应用'
         Write-Host ''
-        Write-Warn2 '新荣耀用 .hnt；.hwt 是否还能被识别取决于机型（2023-11 之后出厂的多数只认 .hnt）'
-        Write-Info '  也有人在 MagicOS 6+ 上反馈第三方主题识别变差，必要时重启或降级主题 App'
+        Write-Warn2 '荣耀第三方主题建议用「鸿蒙 .hwt」，并按 MagicOS 版本选：'
+        Write-Info '  MagicUI / MagicOS 7 → 鸿蒙 2；MagicOS 8 → 鸿蒙 3；MagicOS 9/10 → 鸿蒙 4'
+        Write-Info '  .hnt 是荣耀官方编辑器导出的格式，第三方主题不推荐'
+        Write-Info '  MagicOS 6+ 对第三方主题识别变差，必要时重启或降级主题 App'
         return
     }
 
@@ -123,7 +125,9 @@ switch ($Platform) {
         Write-Info '  2) 选 Download 里的这个 .itz'
         Write-Info '  3) 导入后点「应用」'
         Write-Host ''
-        Write-Warn2 '已知参考实现会拒绝「包内自带字体」的 itz，若导入失败可先去掉 fonts/'
+        Write-Warn2 '前提：2023 年后机型、≥ OriginOS 4，且必须能卸载 i主题与 vivo 文档'
+        Write-Info '  OriginOS 6 起不再支持第三方主题；作者本人也已停止维护 vivo'
+        Write-Info '  已知参考实现会拒绝「包内自带字体」的 itz，导入失败可先去掉 fonts/'
         Write-Info '  vivo 也有私有 Binder 写入通道，但需要真机反查接口，本项目未实现'
         return
     }
