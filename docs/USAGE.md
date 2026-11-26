@@ -265,6 +265,32 @@ python tools/extract_assets.py 主题包 -o 导出目录
 
 ---
 
+## 7.9 把包交给商店自己导入（MIUI / 华为）
+
+不能直接投递时，退一步：**把文件放到商店能看见的地方，让它自己导入**。
+
+```powershell
+.\tools\route_to_store.ps1 -Theme '.\某主题.hwt'
+.\tools\route_to_store.ps1 -Theme x.mtz -Platform miui -NoOpen   # 只放文件，不拉起商店
+```
+
+它做三件事：识别平台 → 把包推到对应目录 → 拉起商店并打印要点几步。
+
+| 平台 | 目标路径 | 手动步骤 |
+|---|---|---|
+| 华为 / 荣耀 | `/sdcard/Huawei/Themes/` | 主题 App → 我的 → 主题 → 应用 |
+| MIUI / HyperOS | `/sdcard/Download/` | 商店 → 本地导入 → 选文件 → 应用 |
+| ColorOS | — | 不需要，直接 `apply_local_theme.ps1` |
+
+**为什么 MIUI 不能"双击就进商店"**：它的 AndroidManifest 里没有声明任何接收本地主题文件的
+intent（`action.SEND`、`category.OPENABLE`、`scheme=file` 命中数都是 0），
+只有 `theme://zhuti.xiaomi.com/...` 这类商店页深链。
+
+**为什么华为这条能用**：放 `Huawei/Themes` 后主题 App 会自己扫描并列出——这是华为开发者问答里
+给设计师的官方做法，不需要任何特权。
+
+---
+
 ## 8. 出问题怎么查
 
 **先跑体检**（菜单 `[1]` 或 `python tools/check_theme.py 主题.theme --device-version <版本号>`），

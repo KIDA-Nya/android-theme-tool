@@ -173,6 +173,7 @@ theme
 | 换 UUID | `tools/newuuid.py` 或 `--new-uuid` | 规避同 UUID 空转 |
 | 锁屏壁纸 | `set_lock_wallpaper.ps1` | 提取主题内的 keyguard 图单独设置 |
 | 包体检 | `check_package.ps1` | `.theme` / `.mtz` / `.hwt` 通吃 |
+| 交给商店导入 | `route_to_store.ps1` | MIUI / 华为：放到商店能扫到的位置并拉起商店 |
 
 ---
 
@@ -195,6 +196,7 @@ theme
 │  ├─ theme_align.py       补全模块声明
 │  ├─ theme_mix.py         混搭拼包（多主题取模块合成一个包）
 │  ├─ extract_assets.py    从 .theme/.mtz/.hwt 里拆出壁纸/图标/字体/铃声
+│  ├─ route_to_store.ps1   把包交给主题商店自己导入（MIUI/华为 用）
 │  ├─ check_theme.py       应用前体检
 │  ├─ extract_keyguard.py  提取锁屏壁纸
 │  └─ newuuid.py           换 UUID（强制重应用）
@@ -313,6 +315,28 @@ ColorOS .theme → [wallpaper] 3 个 / [icons] 473 个 / [ui] 325 个
 | 图标包 | ✅ 随整包 | ⚠️ 仅 App 内调 `ThemeService` | ❌ |
 | 字体 | ❌ 未实现 | ❌ | ❌ 需 root |
 | 铃声 | ⚠️ 标准键可写但 ColorOS 不读（实测 `null`） | 未测 | 未测 |
+
+---
+
+## 把包"交给商店"（MIUI / 华为）
+
+直接调接口只有 ColorOS 有戏，但可以让**商店自己**完成导入——我们只负责把文件放到它能看见的地方。
+
+```powershell
+.\tools\route_to_store.ps1 -Theme '.\某主题.hwt'     # 自动识别平台
+.\tools\route_to_store.ps1 -Theme x.mtz -Platform miui
+```
+
+| 平台 | 放到哪 | 依据 | 之后 |
+|---|---|---|---|
+| 华为 / 荣耀 | `/sdcard/Huawei/Themes/<x>.hwt` | [华为开发者问答](https://developer.huawei.com/consumer/cn/forum/topic/0202798095831690280) 与多个社区教程一致 | 主题 App → 我的 → 主题 → 点「应用」 |
+| MIUI / HyperOS | `/sdcard/Download/<x>.mtz` | 商店 manifest 里 **没有**任何接收本地主题文件的 intent（`SEND`/`OPENABLE`/`file://` 全为 0） | 商店 → 本地导入 → 选文件 → 应用 |
+| ColorOS | 不需要 | 有可直接投递的服务 | 用 `apply_local_theme.ps1` |
+
+两个已知限制：
+
+- **MIUI**：受内容 DRM 限制，商店主题或他人分享的受保护主题，点了「应用」也会被拦
+- **鸿蒙 5 / 高版本 MagicOS**：`Huawei/Themes` 目录被收紧，可能扫不到（社区反馈）
 
 ---
 
