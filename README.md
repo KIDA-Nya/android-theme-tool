@@ -1,453 +1,147 @@
 # Android 主题工具
 
-把本地主题包装进安卓手机。不同品牌能做到的深度不一样，本项目会把**边界**和**依据**都写清楚。
+> 把手上的 `.theme` / `.mtz` / `.hwt` / `.itz` **真正装进手机**——不是解包看看，是让系统认。
+> 一个命令，按你的机型自动选路径。
 
-| 平台 | 包格式 | 能做到 |
-|---|---|---|
-| **ColorOS**（OPPO / 一加 / realme） | `.theme` | **整包应用**、混搭、子集、备份恢复（真机验证） |
-| **MIUI / HyperOS**（小米 / Redmi / POCO） | `.mtz` | 平台探测 + 包体检 + 免 root 注入 Theme backup（**未真机验证**） |
-| **EMUI / HarmonyOS**（华为） | `.hwt` | 平台探测 + 包体检 + 放 `Huawei/Themes` 交给商店导入 |
-| **MagicOS**（荣耀，2023-11 后） | `.hnt` | 平台探测 + 包体检 + 放荣耀主题目录 |
-| **OriginOS**（vivo / iQOO） | `.itz` | 平台探测 + 包体检 + 放 Download 交给 i主题 导入 |
+[![release](https://img.shields.io/github/v/release/KIDA-Nya/android-theme-tool?label=release)](https://github.com/KIDA-Nya/android-theme-tool/releases)
+[![license](https://img.shields.io/github/license/KIDA-Nya/android-theme-tool)](LICENSE)
+![platforms](https://img.shields.io/badge/platforms-ColorOS%20%7C%20HyperOS%20%7C%20MagicOS%20%7C%20OriginOS-1f6feb)
+![verified](https://img.shields.io/badge/%E5%AE%9E%E6%9C%BA%E9%AA%8C%E8%AF%81-OnePlus%209%20Pro%20%C2%B7%20ColorOS%2016-2ea043)
+![no-resign](https://img.shields.io/badge/%E4%B8%8D%E6%94%B9%E5%8C%85-%E4%B8%8D%E9%87%8D%E7%AD%BE-brightgreen)
 
-子品牌（realme / Redmi / POCO / iQOO）与未适配品牌（魅族 / 三星 / 努比亚·红魔）的归属与依据，见 **[docs/BRANDS.md](docs/BRANDS.md)**。
-
-**不改包、不重签、不需要 LSPosed。** ColorOS 这条路是直接调用系统自带的主题商店服务，
-等价于在商店里点「应用」；其它平台则是"让商店自己完成"，权限始终留在商店手里。
-
-> ColorOS 实测环境：一加 LE2123（ColorOS 16 / Android 16，`ro.oplus.theme.version=16000`）。
-> 其它 ColorOS 12+ 机型原理相同，但未逐一验证。
+```powershell
+# 就这一条：自动识别机型，ColorOS 直接应用，其它平台自动转「交给商店」
+.\tools\theme_cli.ps1 apply -Theme .\你的主题.theme
+```
 
 ---
 
-## 它解决什么问题
+## 为什么会有这个项目
 
-ColorOS 的主题商店只认特定格式的包，第三方主题（尤其是没在商店上架的 ROM 主题包）
-往往无法通过正常入口应用。常见的几种做法各有代价：
+网上教人换主题的帖子，基本都卡在同一个地方：**主题商店不认你手上的包**。
 
-| 做法 | 问题 |
+已经试过、并且能证明走不通的路：
+
+| 常见做法 | 为什么不行 |
 |---|---|
-| 重写一个 App | 投递系统服务需要 `signature` 级权限，普通 App 拿不到，只能做「管理器」换不了主题 |
-| 改 dex 后重签 | 换签名会导致 `OPPO_COMPONENT_SAFE` 等签名权限全部丢失，反而更用不了 |
-| LSPosed Hook | 需要装框架、要重启，且部分机型取不到 Shizuku 依赖 |
+| 写个 App 去投递 | 主题服务要 `signature` 级权限，普通 App 拿不到 |
+| 改 dex 后重签 | 换签名会**丢掉全部签名权限**，装上反而更用不了（实测：`OPPO_COMPONENT_SAFE` 等 5 个权限全丢） |
+| 直接往 `/data/theme` 拷文件 | 目录属主是系统组件，拷进去商店**不认这是"已应用"** |
+| 手写商店数据库记录 | 记录在 App 私有数据库，`Android/data` 下那堆只是备份镜像 |
 
-本项目采用最短路径：**原版商店保持不动（签名与权限都在），用 shell 身份调用它的 exported 服务。**
+本项目的做法是**找系统自己的入口**：用 shell 身份调商店导出的投递服务，
+等于替你点了「应用」。原版商店不动、签名不动、不装框架。
 
 ---
 
-## 原理
+## 30 秒上手
 
-```
-本地 .theme
-   │ adb push 到设备
-   ▼
-am startservice  ThemeApplyService  --es THEME_PATH <path>
-   │
-   ├─ 校验主题包（需根级 themeInfo.xml）
-   ├─ 比对 EditorVersion 与 ro.oplus.theme.version
-   ├─ 逐个解包内嵌模块：wallpaper / com.android.systemui / settings / icons / launcher ...
-   ├─ FileProvider 生成 URI + grantUriPermission("com.oplus.uxdesign", ...)
-   ▼
-com.oplus.uxdesign  UxThemeService（AIDL）
-   ▼
-/data/theme/{wallpaper, com.android.systemui, icons, ...}
-settings global applied_default_theme_package_name = <主题 UUID>
+**需要**：手机开 USB 调试 + 装了 `adb`；Python 3.8+（只用于模块声明对齐）；root 可选。
+
+```powershell
+.\tools\theme_cli.ps1 status                   # 先看看认不认得你的手机
+.\tools\theme_cli.ps1 check  -Theme .\x.theme  # 应用前体检（推荐）
+.\tools\theme_cli.ps1 apply  -Theme .\x.theme  # 应用
 ```
 
-详细逆向过程（含失败过的方案、错误码、冻结机制）见 [docs/ANALYSIS.md](docs/ANALYSIS.md)。
+不想敲命令？双击 `主题工具.bat`，或者把主题文件**拖到 bat 图标上**松手。
+
+---
+
+## 支持哪些系统
+
+| 平台 | 包格式 | 能做到 | 验证状态 |
+|---|---|---|---|
+| **ColorOS**（OPPO / 一加 / realme） | `.theme` | **整包应用**、混搭、子集、快照恢复 | ✅ 真机多次 + 重启 |
+| **MIUI / HyperOS**（小米 / Redmi / POCO） | `.mtz` | 探测 + 体检 + 免 root 注入 Theme backup | ⚠️ 未真机 |
+| **EMUI / HarmonyOS**（华为） | `.hwt` | 探测 + 体检 + 放 `Huawei/Themes` 交给商店 | ⚠️ 未真机 |
+| **MagicOS**（荣耀） | `.hwt` / `.hnt` | 同上（第三方主题建议用鸿蒙 `.hwt`） | ⚠️ 未真机 |
+| **OriginOS**（vivo / iQOO） | `.itz` | 探测 + 体检 + 放 Download 交 i主题 | ⚠️ 未真机 |
+
+> 诚实标注：**只有 ColorOS 这条是实机验证过的**。其余平台是「按已知机制实现 + 有单元测试」，
+> 没有真机跑过。每个平台的依据和边界都写在 [docs/BRANDS.md](docs/BRANDS.md)。
+
+---
+
+## 不只是"能应用"
+
+| 能力 | 命令 | 说明 |
+|---|---|---|
+| 混搭 | `-Mix icons:别的.theme` | 从多个主题各取模块拼一个包，其它模块保持不变 |
+| 子集 | `-Only icons,wallpaper` | 只留指定模块，其余回系统默认 |
+| 备份 / 恢复 | `-Backup` / `-Restore` | 快照 `/data/theme`，翻车能回滚 |
+| 换 UUID | `tools/newuuid.py` | 系统按 UUID 判"已是当前主题"，换掉才能强制重应用 |
+| 包体检 | `check_package.ps1` | `.theme/.mtz/.hwt/.itz` 通吃，跨平台 |
+| 资源提取 | `extract_assets.py` | 把壁纸/图标/字体/铃声从包里拆出来（三平台通用） |
+| 稳定性观察 | `watch_theme.ps1 -Reboot` | 采样 UUID/模块，验证会不会被系统改回去 |
+
+---
+
+## 这些坑我都踩过，所以内置了处理
+
+| 现象 | 真因 | 处理 |
+|---|---|---|
+| 图标不变 | 主题里有 `icons/` 但 `themeInfo.xml` 没声明 | 应用前自动扫描 zip 补全声明 |
+| 卡住没反应 | ColorOS 冻结了 `:applyTheme` 进程 | 持续解冻 cgroup + 备份/还原系统设置 |
+| 重复应用毫无反应 | UUID 没变，系统判定"已是当前主题" | 换 UUID，或先切回默认 |
+| 锁屏没变 | 图片放在 `/data/local/tmp`，应用读不到 | 改投应用私有目录（这个坑踩了两次） |
+| `EditorVersion` 不符 | 主题与系统版本不匹配 | 体检直接报出来 |
+
+### ⚠️ 安全提醒（MIUI 用户必读）
+
+主题作者的官方教程明确写着：
+
+> MIUI 11/12/12.5 必须用 **2026-01-11 之后**的主题包，否则**可能导致设备无法开机**；
+> MIUI 12/12.5 套用 MIUI 13+ 的主题会**无限重启（100% 复现）**。
+
+`check_package.ps1` 已经内置这条检查，命中会红字警告。**别跳过体检。**
+
+---
+
+## 文档
+
+| 文档 | 内容 |
+|---|---|
+| [docs/USAGE.md](docs/USAGE.md) | 使用手册：五种上手方式、场景对照、排错、回滚 |
+| [docs/BRANDS.md](docs/BRANDS.md) | 品牌/子品牌矩阵（realme、Redmi、iQOO、荣耀、魅族、三星…） |
+| [docs/VENDOR-FINDINGS.md](docs/VENDOR-FINDINGS.md) | 对 MIUI / 华为 / vivo 的真包实测记录 |
+| [docs/ANALYSIS.md](docs/ANALYSIS.md) | ColorOS 的完整逆向分析（含被证伪的方案） |
+| [docs/STABILITY.md](docs/STABILITY.md) | 长期稳定性：谁会把你主题改回去 |
+| [docs/GUIDE-COMPARISON.md](docs/GUIDE-COMPARISON.md) | 与社区主流教程的逐平台对照 |
+| [docs/ADB.md](docs/ADB.md) | 只用 4 条 adb 命令的最小流程 |
 
 ---
 
 ## 环境要求
 
-| 项 | 说明 |
-|---|---|
-| 手机 | ColorOS 12+（`ThemeApplyService` 存在即可） |
-| adb | 电脑侧需安装 Android Platform Tools；或用手机端 Termux |
-| Python 3.8+ | 仅「声明对齐」用得到；加 `-NoAlign` 可跳过 |
-| root | **可选**。有 root 能自动解冻进程、核对落盘模块；没有也能应用主题 |
-| lockwall.apk | 可选，仅「设置锁屏壁纸」需要（可自行构建） |
-
-可用环境变量覆盖自动探测：
-
-```powershell
-$env:THEME_ADB    = 'D:\platform-tools\adb.exe'
-$env:THEME_PYTHON = 'C:\Python312\python.exe'
-```
-
----
-
-## 一个命令走天下（多系统适配）
-
-不用记每个品牌该用哪个脚本，`theme_cli.ps1` 会按当前设备**自动选路径**：
-
-```powershell
-.\tools\theme_cli.ps1 status                   # 看平台与当前主题
-.\tools\theme_cli.ps1 check -Theme .\x.hwt    # 包体检（任何平台）
-.\tools\theme_cli.ps1 apply -Theme .\x.theme  # ColorOS 真投递；其它平台自动转为「交给商店」
-.\tools\theme_cli.ps1 route -Theme .\x.mtz    # 强制走「交给商店」
-.\tools\theme_cli.ps1 backup                   # 仅 ColorOS
-.\tools\theme_cli.ps1 watch -Minutes 30        # 稳定性观察
-```
-
-`apply` 的行为随平台变化：
-
-| 平台 | `apply` 实际做什么 |
-|---|---|
-| ColorOS | 直接投递 `ThemeApplyService`（真的应用） |
-| MIUI / 华为 / 荣耀 / vivo | 推包到商店能扫到的位置 + 拉起商店 + 告诉你点哪几步 |
-
-## 打包分发
-
-```powershell
-.\tools\build-package.ps1 -Version v5.0.0
-```
-
-产物 `dist/android-theme-tool-v5.0.0.zip`，只含脚本与文档
-（不含主题样本、APK、密钥、第三方壁纸），并打印 SHA256。
-
----
-
-## 快速开始
-
-> 完整步骤、场景与排错见 **[docs/USAGE.md](docs/USAGE.md)**（使用手册）。
-
-### 一键：把主题拖到图标上
-
-把 `.theme` 文件拖到 `主题工具.bat` 上松手即可，剩下的全自动。
-
-### 电脑端（菜单）
-
-```powershell
-adb devices                       # 先确认设备已授权
-# 双击「主题工具.bat」，不要带参数
-```
-
-### 电脑端（命令行）
-
-```powershell
-Set-ExecutionPolicy -Scope Process Bypass -Force
-.\tools\apply_local_theme.ps1 -Theme '.\你的主题.theme'
-```
-
-菜单里有六项：
-
-```
-[1] 主题包体检（应用前建议先跑一次）
-[2] 应用主题（自动含锁屏壁纸）
-[3] 只设置锁屏壁纸
-[4] 查看当前主题状态
-[5] 恢复系统默认主题
-[6] 按内容补齐缺失模块（需 root）
-```
-
-常用参数：
-
-```powershell
-.\tools\apply_local_theme.ps1 -Theme x.theme -Verify    # 只看状态
-.\tools\apply_local_theme.ps1 -Theme x.theme -NoLock    # 不动锁屏
-.\tools\apply_local_theme.ps1 -Revert                   # 恢复默认
-```
-
-### 只想用纯 adb？4 条命令就够
-
-不装 PowerShell 脚本、不用 Python，最小流程：
-
-```bash
-adb push 主题.theme /sdcard/Download/theme_apply.theme
-adb shell appops set com.heytap.themestore MANAGE_EXTERNAL_STORAGE allow
-adb shell input keyevent KEYCODE_WAKEUP
-adb shell am startservice -n com.heytap.themestore/com.nearme.themespace.services.ThemeApplyService \
-  --es THEME_PATH /sdcard/Download/theme_apply.theme
-```
-
-或用封装好的脚本（Git Bash / WSL / macOS / Linux）：
-
-```bash
-./tools/adb-apply.sh 主题.theme
-./tools/adb-apply.sh --status
-```
-
-细节、正常日志与排错见 [docs/ADB.md](docs/ADB.md)。
-
----
-
-## 快速开始（手机端，无需电脑）
-
-```bash
-# Termux 里执行一次
-sh /sdcard/Download/setup.sh
-
-# 之后只需
-theme
-```
-
-`setup.sh` 会装好 Shizuku 的 `rish`、生成 `theme` 命令、配好 PATH。
-没有 root 也能用（`rish` 就是 shell 身份）。
-
-想更进一步：装 `Termux:Widget` 后把 `phone/widget.sh` 放进 `~/.shortcuts/`，
-桌面放个小组件，**点一下就应用最新主题**（见 [docs/USAGE.md](docs/USAGE.md) 第 5 节）。
-
-详见 [docs/PHONE.md](docs/PHONE.md)。
-
----
-
-## 遇到的坑（都已内置处理）
-
-| 坑 | 现象 | 处理 |
-|---|---|---|
-| **模块声明缺失** | 主题里有 `icons` 但没声明 → 图标不生效，还会清掉已生效的图标模块 | 应用前自动「对齐」：扫描 zip 实际条目补全 `<packageInfo>` |
-| **进程被冻结** | 卡住不动、没有 `apply success` | ColorOS 的 `OplusHansManager` 会冻结 `:applyTheme`；脚本持续把 `uid_xxx/cgroup.freeze` 写 0 |
-| **同 UUID 空转** | 重复应用同一主题完全没反应 | 系统按 UUID 判定「已是当前主题」；可先切回默认，或用 `newuuid.py` 换 UUID |
-| **存储不可读** | 应用日志 `EACCES` | 需 `appops set ... MANAGE_EXTERNAL_STORAGE allow` |
-| **锁屏图不可读** | 日志 `from=asset`，锁屏没变 | `/data/local/tmp` 对普通应用不可读；改为写入应用私有目录 |
-| **版本不匹配** | 中止在 `ThemeOSVersion is diff` | `EditorVersion` 必须等于 `ro.oplus.theme.version`，体检会提示 |
-
-## 能力清单
-
-| 能力 | 入口 | 说明 |
-|---|---|---|
-| 整包应用 | `apply_local_theme.ps1 -Theme x.theme` | 自动对齐声明、自动解冻 |
-| 只应用部分模块 | `-Only icons,wallpaper` | 其余模块回系统默认（引擎按集合整体替换） |
-| 混搭（替换单模块） | `-Mix icons:别的.theme` | 其它模块保持不变 |
-| 备份 / 恢复 | `-Backup` / `-Restore` | 快照 `/data/theme`，需 root |
-| 换 UUID | `tools/newuuid.py` 或 `--new-uuid` | 规避同 UUID 空转 |
-| 锁屏壁纸 | `set_lock_wallpaper.ps1` | 提取主题内的 keyguard 图单独设置 |
-| 包体检 | `check_package.ps1` | `.theme` / `.mtz` / `.hwt` 通吃 |
-| 交给商店导入 | `route_to_store.ps1` | MIUI / 华为：放到商店能扫到的位置并拉起商店 |
-| MIUI 免 root 注入 | `miui_theme_backup.ps1` | 改商店自己信任的 Theme backup 组件（**未真机验证**） |
-
----
-
-## 目录结构
-
-```
-.
-├─ 主题工具.bat            Windows 双击入口（纯 ASCII，避免 cmd 编码问题）
-├─ tools/
-│  ├─ theme_console.ps1    交互式菜单
-│  ├─ apply_local_theme.ps1  应用主题主流程
-│  ├─ set_lock_wallpaper.ps1 设置锁屏壁纸
-│  ├─ push_modules.ps1     直接补写 /data/theme（兜底）
-│  ├─ build-lockwall.ps1   构建 LockWall APK
-│  ├─ common.ps1           共享函数（adb/python 探测、安全执行、解冻）
-│  ├─ adb-apply.sh         纯 adb 投递（无 PowerShell / 无 Python 依赖）
-│  ├─ probe.ps1            兼容性探测 / 适配器选择（换机型先跑这个）
-│  ├─ check_package.ps1    统一包体检（.theme/.mtz/.hwt 自动选适配器）
-│  ├─ adapters/            品牌适配器（coloros 可写入；miui/emui 只读）
-│  ├─ theme_align.py       补全模块声明
-│  ├─ theme_mix.py         混搭拼包（多主题取模块合成一个包）
-│  ├─ extract_assets.py    从 .theme/.mtz/.hwt 里拆出壁纸/图标/字体/铃声
-│  ├─ route_to_store.ps1   把包交给主题商店自己导入（MIUI/华为 用）
-│  ├─ miui_theme_backup.ps1  MIUI/HyperOS 免 root 注入 Theme backup
-│  ├─ check_theme.py       应用前体检
-│  ├─ extract_keyguard.py  提取锁屏壁纸
-│  └─ newuuid.py           换 UUID（强制重应用）
-├─ phone/
-│  ├─ theme.sh             手机端主脚本
-│  ├─ setup.sh             Termux 一次性安装
-│  └─ widget.sh            Termux:Widget 桌面小组件入口
-├─ lockwall/               LockWall 源码（壁纸小工具）
-├─ tests/                  无真机回归（合成 mtz/hwt 夹具）
-└─ docs/
-   ├─ ANALYSIS.md          完整逆向分析
-   ├─ ADB.md               纯 adb 最小流程与排错
-   ├─ USAGE.md             使用手册（四种一键方式 + 场景 + 排错）
-   ├─ PORTABILITY.md       可移植性与健壮性（换机型看这个）
-   ├─ UNIVERSAL.md         跨品牌通用策略调研与适配器架构
-   ├─ VENDOR-FINDINGS.md   MIUI / EMUI / vivo 的真实包实测记录
-   ├─ BRANDS.md            品牌与子品牌支持矩阵
-   ├─ GUIDE-COMPARISON.md  与社区官方教程的对照（含差异与本项目的边界）
-   ├─ STABILITY.md         长期稳定性：各平台可能回滚的机制与实测数据
-   └─ PHONE.md             手机端说明
-```
-
----
-
-## 构建 LockWall
-
-```powershell
-.\tools\build-lockwall.ps1 -Install
-```
-
-只用 SDK 自带命令行工具（`javac` → `d8` → `aapt2` → `zipalign` → `apksigner`），不需要 Gradle。
-
----
-
-## 能用在你手机上吗
-
-先说结论：**这是 ColorOS 主题栈的调用器，不是通用换主题工具。**
-
-| 范围 | 判断 |
-|---|---|
-| 一加 LE2123 · ColorOS 16 | ✅ 本项目所有实测机型 |
-| OPPO / 一加 / realme 的 ColorOS 12–16、realmeUI 3+ | 大概率可用，换机前先跑探测 |
-| ColorOS 11 及更早 | ❌ 没有 uxdesign，走完全不同的本地解包路径 |
-| 华为/荣耀（.hwt）、小米（.mtz）、三星、原生 Android | ❌ 没有这套组件 |
-
-换机型第一件事：
-
-```powershell
-.\tools\probe.ps1          # 电脑端
-theme --probe              # 手机端
-```
-
-它会逐项检查主题商店服务、权限、uxdesign、`/data/theme`、冻结控制等，
-并标注**平台识别**与**适配器**（ColorOS 可写入，MIUI/EMUI 只读），
-给出「完全可用 / 有降级 / 不可用」的判定。
-
-包体检（`.theme` / `.mtz` / `.hwt` 都支持，按平台自动选适配器）：
-
-```powershell
-.\tools\check_package.ps1 -Path '.\xxx.theme'
-```
-
-想了解能不能扩展到小米/华为，见 [docs/UNIVERSAL.md](docs/UNIVERSAL.md)；
-机型细节见 [docs/PORTABILITY.md](docs/PORTABILITY.md)。
-
----
-
-## 混搭与子集（引擎按集合整体替换）
-
-ColorOS 的 `ThemeApplyService` **按包里声明的模块集合整体替换**。实测：应用一个只声明
-`icons`、`wallpaper` 的包后，`/data/theme` 就只剩这两项，其它模块被清掉（回系统默认）。
-
-| 我想要 | 命令 | 结果 |
-|---|---|---|
-| 只改图标，其它保持不变 | `-Mix icons:别的.theme` | 包内仍含全部模块，只换 icons |
-| 只留图标，其它回默认 | `-Only icons` | 包里只有 icons |
-
-```powershell
-.\tools\apply_local_theme.ps1 -Theme '.\底包.theme' -Mix 'icons:D:\别的主题.theme'
-.\tools\apply_local_theme.ps1 -Theme '.\完整.theme' -Only icons,wallpaper
-.\tools\apply_local_theme.ps1 -Backup      # 快照 /data/theme（需 root）
-.\tools\apply_local_theme.ps1 -Restore     # 恢复最新快照
-```
-
-详见 [docs/USAGE.md](docs/USAGE.md) 第 7.5 节。
-
----
-
-## 非 ColorOS 机型能做什么（间接方案）
-
-直接投递只有 ColorOS 走得通，但**资源是通用的**。这版加了 `extract_assets.py`：
-
-```powershell
-python tools/extract_assets.py 主题包 -o 导出目录      # 拆出资源
-python tools/extract_assets.py 主题包 --list          # 只看清单
-```
-
-实测输出：
-
-```
-ColorOS .theme → [wallpaper] 3 个 / [icons] 473 个 / [ui] 325 个
-华为 .hwt      → [wallpaper] 3 个 / [icons] 55 个  / [ui] 24 个
-```
-
-拿到壁纸后，**任何品牌**都能用它设壁纸（走系统 `WallpaperManager`，与主题栈无关）：
-
-```powershell
-.\tools\set_lock_wallpaper.ps1 -Image 导出的壁纸.jpg            # 只设锁屏
-.\tools\set_lock_wallpaper.ps1 -Image 导出的壁纸.jpg -Desktop   # 桌面+锁屏
-```
-
-能力边界（诚实版）：
-
-| 能力 | ColorOS | MIUI / HyperOS | 华为 / 荣耀 |
-|---|---|---|---|
-| 整包应用 | ✅ 已实现 | ❌ 无对外接口 | ❌ 未验证 |
-| 提取资源（壁纸/图标/字体/铃声） | ✅ | ✅ | ✅ |
-| 设壁纸（桌面+锁屏） | ✅ | ✅ 走同一 API | ✅ 走同一 API |
-| 图标包 | ✅ 随整包 | ⚠️ 仅 App 内调 `ThemeService` | ❌ |
-| 字体 | ❌ 未实现 | ❌ | ❌ 需 root |
-| 铃声 | ⚠️ 标准键可写但 ColorOS 不读（实测 `null`） | 未测 | 未测 |
-
----
-
-## 把包"交给商店"（MIUI / 华为）
-
-直接调接口只有 ColorOS 有戏，但可以让**商店自己**完成导入——我们只负责把文件放到它能看见的地方。
-
-```powershell
-.\tools\route_to_store.ps1 -Theme '.\某主题.hwt'     # 自动识别平台
-.\tools\route_to_store.ps1 -Theme x.mtz -Platform miui
-```
-
-| 平台 | 放到哪 | 依据 | 之后 |
-|---|---|---|---|
-| 华为 / 荣耀 | `/sdcard/Huawei/Themes/<x>.hwt` | [华为开发者问答](https://developer.huawei.com/consumer/cn/forum/topic/0202798095831690280) 与多个社区教程一致 | 主题 App → 我的 → 主题 → 点「应用」 |
-| MIUI / HyperOS | `/sdcard/Download/<x>.mtz` | 商店 manifest 里 **没有**任何接收本地主题文件的 intent（`SEND`/`OPENABLE`/`file://` 全为 0） | 商店 → 本地导入 → 选文件 → 应用 |
-| ColorOS | 不需要 | 有可直接投递的服务 | 用 `apply_local_theme.ps1` |
-
-两个已知限制：
-
-- **MIUI**：受内容 DRM 限制，商店主题或他人分享的受保护主题，点了「应用」也会被拦
-- **鸿蒙 5 / 高版本 MagicOS**：`Huawei/Themes` 目录被收紧，可能扫不到（社区反馈）
-
----
-
-## MIUI / HyperOS 的另一条路：改商店自己的 "Theme backup"
-
-刷机圈有个更聪明的思路，我把它实现了：**不新建主题，而是改商店自己造的那个 backup**。
-
-商店把主题库放在 `/sdcard/Android/data/com.android.thememanager/files/MIUI/theme/.data`——
-**这个目录 shell 可读写**，而 `/data/system/theme` 不行。其中：
-
-- `content/<code>/<id>.mrc` 是组件本体（zip）
-- `meta/<code>/<id>.mrm` 是元数据，`hash` 就是 `.mrc` 的 SHA-1，**没有签名**
-- "Theme backup" 是商店「定制主题」时生成的，**没有 rights 记录、应用时不问服务器**
-
-所以：把 backup 里某个组件的 `localId` 指向我们打包的文件，应用时由**商店自己**写进系统。
-
-```powershell
-.\tools\miui_theme_backup.ps1 -List                                    # 看有哪些 backup
-.\tools\miui_theme_backup.ps1 -Mtz x.mtz -Theme <id> -Component icons   # 注入
-```
-
-前提：手机上要先生成一个 Theme backup（主题应用 → 定制主题 → 改一项 → 应用）。
-
-代价与限制都写在 [docs/MIUI-THEME-BACKUP.md](docs/MIUI-THEME-BACKUP.md)：
-**有单元测试、没有真机验证**；还列了另外 4 条方案（V7 模块 / Xposed / ThemeStore / 降版本）的对照。
-
----
-
-## 开发注意（编码坑）
-
-这套脚本对文件编码很敏感，改动时请保持：
-
-| 文件 | 要求 | 原因 |
-|---|---|---|
-| `*.ps1` | **UTF-8 带 BOM** + CRLF | Windows PowerShell 5.1 无 BOM 时按 ANSI 读取，中文会变乱码并导致语法错误 |
-| `phone/*.sh` | UTF-8 无 BOM + **LF** | 设备上是 `/system/bin/sh`，CRLF 会让 `do`/`then` 解析失败 |
-| `主题工具.bat` | **纯 ASCII** + CRLF | cmd 按 OEM 代码页解析批处理，UTF-8 中文必乱码 |
-
-`.gitattributes` 已固定换行；`.bat` 保持 ASCII 是为了绕开代码页问题（用英文提示）。
-PowerShell 里没有 `utf8NoBOM` 枚举，需要无 BOM 时用：
-
-```powershell
-[System.IO.File]::WriteAllText($path, $text, (New-Object System.Text.UTF8Encoding($false)))
-```
+- **adb**：装 [Platform Tools](https://developer.android.com/tools/releases/platform-tools)，或设 `THEME_ADB` 指向它
+- **Python 3.8+**：只影响「模块声明对齐」，没有也能跑（图标可能不生效）；或设 `THEME_PYTHON`
+- **root**：可选。有 root 更稳（自动解冻、快照备份、核对模块）
+- **PowerShell 5.1 / 7+**（Windows）；手机端另有 Termux 脚本
 
 ---
 
 ## 已知限制
 
-- 只处理 **ColorOS ROM 主题包**（根级 `themeInfo.xml` + 内嵌模块 zip）；
-  商店下载的 inner 格式（`resources/ descriptions/ previews/ keys/`）走的是另一条通道，不被支持。
-- 只能整包应用；「只换图标 / 只换锁屏样式 / 字体 / 铃声」这类模块化应用尚未实现。
-  相关逆向线索见 `docs/ANALYSIS.md` 的 `n9b` / `ThemeConfigInfo` 部分。
-- 主题若不含锁屏资源，锁屏只能换壁纸，样式仍是系统默认。
-- 系统 OTA 后 `ro.oplus.theme.version` 变化，老主题需改 `EditorVersion` 后重新打包。
+- 只处理 **ROM 主题包**（ColorOS `.theme` / MIUI `.mtz` / 华为 `.hwt` / vivo `.itz`）；
+  商店下载的 inner 格式（`resources/ descriptions/ previews/ keys/`）走另一条通道，不支持
+- ColorOS 只能整包或按模块子集应用，**不能只换字体/铃声**（那是另一条通道）
+- 平板 / 折叠屏：上游教程标注不适配，本项目同样未验证
+- 海外 ROM：未验证（上游教程仅覆盖中国大陆版）
 
 ---
 
 ## 免责声明
 
-- 本项目仅用于**个人在自有设备上**使用自己拥有或获授权的主题资源。
-- 主题包、壁纸、图标的著作权归原作者所有；请勿二次分发或商用。
-- 修改系统主题属于非官方操作，请自行备份数据（`adb shell settings get/put`、
-  `/data/theme` 均可能被重置）。使用风险自负。
+- 仅供**个人在自有设备**上使用自己拥有或获授权的主题资源
+- 主题、壁纸、图标的著作权归原作者；请勿二次分发或商用
+- 修改系统主题属非官方操作，请自行备份。使用风险自负
 
 ## License
 
 [MIT](LICENSE)
+
+---
+
+**如果这个项目帮你把主题装进去了**，点个 ⭐ 能让更多同样卡住的人搜到它——
+这个领域的中文资料太散了，多一个人看到就少一个人踩「重签丢权限」那个坑。
