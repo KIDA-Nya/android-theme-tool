@@ -394,29 +394,76 @@ Themes 进程（com.android.thememanager，普通应用 uid）
                         （另有 ACTION_MMS_THEME_CHANGED）
 ```
 
-### 关键点：商店自己也不是 root
+### 关键点：真正写盘的是商店自己，不是 security 服务
 
-`ThemeRuntimeManager.bindService()` 里这一行说明了一切：
+**（此处修正早期判断）** 一开始看到 `ThemeRuntimeManager.bindService()` 拿
+`getSystemService("security")`，以为是"商店把写盘交给安全服务"。继续读源码后结论不同：
+
+**1) `security` 服务里根本没有 `setTheme`** —— 主题相关只有 `saveIcon`：
 
 ```java
-this.mSecurityManager = this.mContext.getSystemService("security");
-...
-Method method = Method.of(this.mSecurityManager.getClass(), "saveIcon",
-                           Void.TYPE, new Class[]{String.class, Bitmap.class});
-method.invoke(this.mSecurityManager.getClass(), this.mSecurityManager, new Object[]{fileName, icon});
+// com/miui/server/SecurityManagerService.java
+public void saveIcon(String fileName, Bitmap icon) { saveIconInner(fileName, icon); }
+// 全文没有 setTheme / setThemeRes / setThemeType
 ```
 
-**它没有直接写 `/data/system/theme`**——那是 root 权限。它把动作交给 system_server 里的
-`security` 服务（以 `system` uid 运行），由后者完成特权写盘。
+（APK 里那几个 `setTheme*` 字符串不是调这个服务，是商店自己的主题记录/字段。）
 
-这解释了三件事：
+**2) `saveIcon` 有硬身份校验，shell 过不去**：
 
-1. **为什么第三方 App 抄不了**：`security` 服务的调用受系统级权限约束，
-   普通 App、`shell`(uid 2000) 都过不去（第八节的四条门）。
-2. **为什么 MIUI 备份能行**：`com.miui.backup` 是系统应用（`android.uid.backup`），
+```java
+private boolean allowSaveIconCache() {
+    return isSystemApp() && (UserHandle.getAppId(Binder.getCallingUid()) == 9801
+                             || canSaveExternalIconCache());
+}
+private boolean isSystemApp() {
+    int uid = Binder.getCallingUid();
+    ...
+    if ((pm.getApplicationInfo(pm.getPackagesForUid(uid)[0], 0).flags & 1) != 0) return true; // FLAG_SYSTEM
+    return false;
+}
+```
+
+要求调用者带 `FLAG_SYSTEM`（预装系统应用）。`com.android.shell` 不是系统应用，直接 false。
+
+**3) 整包文件复制是商店进程自己做的直接 I/O**：
+
+```
+ThemeFileUtils.copySafety(...)
+  → new File(path).canWrite()
+  → miuix.core.util.FileUtils.zy(File src, File dst)    // 真实拷贝
+  → new FileWriter(path)                                 // 写配置
+```
+
+也就是说：`com.android.thememanager` 是**平台签名 + 预装**的应用，运行在特权域里，
+它自己就能读写 `/data/system/theme`，并不需要谁来"代写"。
+`security` 服务只承担少数需要 system uid 的零碎操作（图标缓存等）。
+
+**所以这条路对第三方是死的**：缺的不是"调用方式"，而是**平台签名与预装身份**。
+
+这解释了四件事：
+
+1. **为什么第三方 App 抄不了**：商店能写 `/data/system/theme` 是因为它**平台签名 + 预装**，
+   运行在特权域里；第三方没有这个身份。`security` 服务同样要求调用者带 `FLAG_SYSTEM`。
+2. **为什么 shell / Shizuku 也不行**：`shell`(uid 2000) 不是系统应用，
+   `isSystemApp()` 直接 false；`USE_INTERNAL_GENERAL_API` 也不在它名下（第八节）。
+3. **为什么 MIUI 备份能行**：`com.miui.backup` 是系统应用（`android.uid.backup`），
    它恢复时用的是它自己的系统权限，不是我们的。
-3. **为什么"root 就行"是误解**：root 能写盘，但应用主题前那道 `DrmManager.isLegal`
+4. **为什么"root 就行"是误解**：root 能写盘，但应用主题前那道 `DrmManager.isLegal`
    仍需绕过——那台机器靠的是 LSPosed CorePatch。
+
+### 那能不能自己造一个"平台签名"的应用来调它？
+
+不行。MIUI 的 `SecurityManagerService` 在 privileged 路径上直接比对平台签名：
+
+```java
+Signature[] platformSignature = pm.getPackageInfo("android", 64).signatures;
+enforcePlatformSignature(platformSignature);
+enforceAppSignature(platformSignature, "com.android.updater", true);
+enforceAppSignature(platformSignature, "com.miui.securitycenter", false);
+```
+
+re-sign 只会让签名对不上（这与 ColorOS 上"重签丢权限"是同一个结局）。
 
 ### 与 ColorOS 的对照
 
