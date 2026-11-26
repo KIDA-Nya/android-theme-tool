@@ -33,17 +33,16 @@ SVC=""
 REMOTE=/sdcard/Download/theme_apply.theme
 TIMEOUT=${TIMEOUT:-180}
 
-ADB=${ADB:-adb}
-if [ -n "${ADB_SERIAL:-}" ]; then
-    ADB="$ADB -s $ADB_SERIAL"
-fi
+ADB_BIN=${ADB:-adb}
+ADB_SERIAL_ARG=
+[ -n "${ADB_SERIAL:-}" ] && ADB_SERIAL_ARG="-s $ADB_SERIAL"
 
 say()  { echo "  $*"; }
 ok()   { echo "  [OK] $*"; }
 warn() { echo "  [!]  $*"; }
 die()  { echo "  [x]  $*"; exit 1; }
 
-run() { $ADB "$@"; }
+run() { $ADB_BIN $ADB_SERIAL_ARG "$@"; }
 
 # ---------------------------------------------------------------- 探测主题商店
 
@@ -105,7 +104,7 @@ esac
 
 THEME=$1
 [ -f "$THEME" ] || die "找不到主题文件：$THEME"
-command -v "$ADB" >/dev/null 2>&1 || [ -x "$ADB" ] || die "找不到 adb（可用 ADB=/path/to/adb 指定）"
+command -v "$ADB_BIN" >/dev/null 2>&1 || [ -x "$ADB_BIN" ] || die "找不到 adb（可用 ADB=/path/to/adb 指定）"
 
 DEVS=$(run devices | tr -d '\r' | awk 'NR>1 && $2=="device" {print $1}')
 [ -z "$DEVS" ] && die "没有已授权的设备。请打开 USB 调试并在手机上允许。"

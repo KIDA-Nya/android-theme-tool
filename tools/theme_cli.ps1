@@ -36,7 +36,6 @@ param(
     [string]$Device = ''
 )
 
-$ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'common.ps1')
 . (Join-Path $PSScriptRoot 'adapters\_registry.ps1')
 
@@ -47,6 +46,15 @@ function Get-Platform {
     $hit = Get-AdapterCatalog | Where-Object { $_.Present } | Select-Object -First 1
     if ($hit) { return $hit }
     return $null
+}
+
+function ConvertTo-RoutePlatform {
+    <# 适配器名与 route_to_store 的平台名不是一回事：emui 要按包名拆成 huawei / honor #>
+    param($Adapter)
+    if (-not $Adapter) { return 'auto' }
+    if ($Adapter.Name -ne 'emui') { return $Adapter.Name }
+    if ("$($Adapter.Package)" -like 'com.hihonor*') { return 'honor' }
+    return 'huawei'
 }
 
 function Get-PackageHint {
@@ -118,14 +126,13 @@ switch ($Action) {
         Write-Step '该平台不支持直接投递，改用「交给商店」'
         Write-Info "  原因：$($platform.Reason)"
         if ($DryRun) { Write-Info '  （-DryRun：只打印计划）' }
-        & (Join-Path $here 'route_to_store.ps1') -Theme $Theme -Platform $platform.Name -Device $Device
+        & (Join-Path $here 'route_to_store.ps1') -Theme $Theme -Platform (ConvertTo-RoutePlatform $platform) -Device $Device
     }
 
     'route' {
         if (-not $Theme) { Write-Bad '需要 -Theme <主题包路径>'; return }
         if (-not (Test-Path -LiteralPath $Theme)) { Write-Bad "找不到：$Theme"; return }
-        $p = if ($platform) { $platform.Name } else { 'auto' }
-        & (Join-Path $here 'route_to_store.ps1') -Theme $Theme -Platform $p -Device $Device
+        & (Join-Path $here 'route_to_store.ps1') -Theme $Theme -Platform (ConvertTo-RoutePlatform $platform) -Device $Device
     }
 
     'backup' {

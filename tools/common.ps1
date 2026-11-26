@@ -54,10 +54,19 @@ function Resolve-Adb {
 }
 
 function Invoke-Adb {
+    <#
+      统一出口。不要把 2>&1 的结果原样往外抛：
+      adb 会往 stderr 打普通提示（例如 "1 file pushed"），PowerShell 会把它变成
+      ErrorRecord；调用方一旦捕获或严格化就会当成异常中断。这里统一降级成字符串。
+    #>
     param([string[]]$ArgList)
     $exe = Resolve-Adb
-    if ($script:Device) { & $exe -s $script:Device @ArgList 2>&1 }
-    else { & $exe @ArgList 2>&1 }
+    $raw = if ($script:Device) { & $exe -s $script:Device @ArgList 2>&1 }
+           else { & $exe @ArgList 2>&1 }
+    foreach ($item in $raw) {
+        if ($item -is [System.Management.Automation.ErrorRecord]) { $item.Exception.Message }
+        else { $item }
+    }
 }
 
 function Select-Device {
@@ -126,9 +135,10 @@ function Resolve-ThemeStore {
         foreach ($pkg in $candidates) {
             if ($installed -match ('package:' + [regex]::Escape($pkg) + '\s')) { $found += $pkg }
         }
+        $foundText = if ($found) { $found -join ', ' } else { '（无）' }
         throw ("没找到主题商店的 ThemeApplyService。`n" +
-               "  已安装候选：{0}`n" +
-               "  说明：本方案依赖 OPPO/一加/realme 的 ColorOS 主题栈，其它品牌不适用。" -f ($(if ($found) { $found -join ', ' } else { '（无）' })))
+               "  已安装候选：$foundText`n" +
+               "  说明：本方案依赖 OPPO/一加/realme 的 ColorOS 主题栈，其它品牌不适用。")
     }
 
     $script:ThemePkg = $picked.Package
@@ -173,15 +183,21 @@ function Initialize-Device {
     Select-Device $Device | Out-Null
     if (-not $Quiet) { Write-Info "设备: $($script:Device)" }
 
-    $store = Resolve-ThemeStore
-    if (-not $AppPackage) { $AppPackage = $store.Package }
+    # 注意：这里不能因为"不是 ColorOS"就终止——本文件的调用方包括 MIUI / 华为 / vivo 的脚本
+    $store = $null
+    try { $store = Resolve-ThemeStore } catch { $store = $null }
+
+    if (-not $AppPackage -and $store) { $AppPackage = $store.Package }
     if (-not $Quiet) {
-        Write-Info "主题商店: $($store.Package)"
-        Write-Info "服务组件: $($store.Service)"
+        if ($store) {
+            Write-Info "主题商店: $($store.Package)"
+            Write-Info "服务组件: $($store.Service)"
+        }
+        else { Write-Info '未检测到 ColorOS 主题商店（非 ColorOS 或商店未安装），跳过商店相关步骤' }
     }
 
     $isRoot = Test-Root
-    if ($isRoot) {
+    if ($isRoot -and $AppPackage) {
         $script:AppUid = Get-AppUid $AppPackage
         Initialize-Unfreeze $AppPackage
         $how = if ($script:SuCmd -eq '') { 'adb shell 已是 root' } else { $script:SuCmd }

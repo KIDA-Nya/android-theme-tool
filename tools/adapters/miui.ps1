@@ -1,4 +1,4 @@
-﻿﻿# MIUI / HyperOS 适配器（小米 / Redmi）
+﻿# MIUI / HyperOS 适配器（小米 / Redmi）
 #
 # 能力：探测 + 包体检（**.mtz 只读**）
 # 写入未实现：需要写 /data/system/theme 或调用 com.android.thememanager 的受保护入口，

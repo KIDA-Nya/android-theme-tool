@@ -50,10 +50,13 @@ function Wait-DeviceReady {
     param([int]$TimeoutSec = 300)
     $deadline = (Get-Date).AddSeconds($TimeoutSec)
     while ((Get-Date) -lt $deadline) {
-        try { Invoke-Adb @('wait-for-device') | Out-Null } catch { }
-        $boot = (Invoke-Sh 'getprop sys.boot_completed')
-        $probe = (Invoke-Sh 'settings get global adb_enabled')
-        if ($boot -match '1' -and $null -ne $probe) { return $true }
+        # 不能用 adb wait-for-device：它没有超时，设备回不来就永久挂住
+        $state = ((Invoke-Adb @('get-state')) | Out-String).Trim()
+        if ($state -eq 'device') {
+            $boot = (Invoke-Sh 'getprop sys.boot_completed')
+            $probe = (Invoke-Sh 'settings get global adb_enabled')
+            if ($boot -match '1' -and $null -ne $probe) { return $true }
+        }
         Start-Sleep -Seconds 5
     }
     return $false
@@ -66,25 +69,23 @@ function Get-Snapshot {
     switch ($platform) {
         'coloros' {
             $snap['uuid'] = (Get-Setting global 'applied_default_theme_package_name')
-            $mods = (Invoke-Sh "ls -1 /data/theme 2>/dev/null | tr '\n' ','")
-            $snap['modules'] = $mods
-            $snap['configMtime'] = (Invoke-Sh "stat -c %Y /data/theme/config 2>/dev/null")
-            $snap['iconsMtime'] = (Invoke-Sh "stat -c %Y /data/theme/icons 2>/dev/null")
+            $snap['modules'] = (Invoke-Sh '[ -r /data/theme ] && { ls -1 /data/theme | tr "\n" ","; } || echo __NA__')
+            $snap['configMtime'] = (Invoke-Sh '[ -f /data/theme/config ] && stat -c %Y /data/theme/config || echo __NA__')
+            $snap['iconsMtime'] = (Invoke-Sh '[ -e /data/theme/icons ] && stat -c %Y /data/theme/icons || echo __NA__')
         }
         'miui' {
             $snap['libraryCount'] = (Invoke-Sh "ls -1 /sdcard/Android/data/com.android.thememanager/files/MIUI/theme/.data/meta/theme 2>/dev/null | wc -l")
             $snap['libraryNewest'] = (Invoke-Sh "ls -1t /sdcard/Android/data/com.android.thememanager/files/MIUI/theme/.data/meta/theme 2>/dev/null | head -1")
-            $snap['applied'] = (Invoke-Sh "ls -1 /data/system/theme 2>/dev/null | tr '\n' ','")
+            $snap['applied'] = (Invoke-Sh '[ -r /data/system/theme ] && { ls -1 /data/system/theme | tr "\n" ","; } || echo __NA__')
         }
         'emui' {
-            $h = (Invoke-Sh "ls -1 /data/themes 2>/dev/null | wc -l")
-            $snap['dataThemes'] = $h
+            $snap['dataThemes'] = (Invoke-Sh '[ -r /data/themes ] && ls -1 /data/themes | wc -l || echo __NA__')
             $snap['hwThemes'] = (Invoke-Sh "ls -1 /sdcard/Huawei/Themes 2>/dev/null | wc -l")
             $snap['honorThemes'] = (Invoke-Sh "ls -1 /sdcard/Android/data/com.hihonor.android.thememanager/files/Download/Honor/Themes 2>/dev/null | wc -l")
         }
         'vivo' {
             $snap['themeData'] = (Invoke-Sh "ls -1 /sdcard/Android/data/com.bbk.theme 2>/dev/null | wc -l")
-            $snap['core'] = (Invoke-Sh "ls -1 /data/bbkcore/theme 2>/dev/null | wc -l")
+            $snap['core'] = (Invoke-Sh '[ -r /data/bbkcore/theme ] && ls -1 /data/bbkcore/theme | wc -l || echo __NA__')
         }
         default {
             $snap['packages'] = (Invoke-Sh "pm list packages 2>/dev/null | wc -l")
@@ -92,7 +93,7 @@ function Get-Snapshot {
     }
     foreach ($k in @($snap.Keys)) {
         if ($k -in @('time', 'ok')) { continue }
-        if ($null -eq $snap[$k]) { $nulls++ }
+        if ($null -eq $snap[$k] -or "$($snap[$k])" -eq '__NA__') { $nulls++ }
     }
     if ($nulls -gt 0) { $snap['ok'] = 'unavailable' }
     return [pscustomobject]$snap
@@ -142,7 +143,7 @@ if ($Reboot) {
 
 $deadline = (Get-Date).AddMinutes($Minutes)
 $changes = 0
-$prev = $base
+$prev = if ($Reboot -and $after) { $after } else { $base }
 Write-Step "持续观察 $Minutes 分钟"
 while ((Get-Date) -lt $deadline) {
     Start-Sleep -Seconds $Interval

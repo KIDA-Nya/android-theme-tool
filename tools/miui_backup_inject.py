@@ -41,7 +41,9 @@ def load_json(path):
 
 
 def dump_json(path, obj):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    d = os.path.dirname(path)
+    if d:
+        os.makedirs(d, exist_ok=True)
     with io.open(path, 'w', encoding='utf-8', newline='\n') as f:
         json.dump(obj, f, ensure_ascii=False, indent=2)
 
