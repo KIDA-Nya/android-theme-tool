@@ -122,7 +122,7 @@ if ($LASTEXITCODE -ne 0) { throw 'jar 失败' }
 $dexDir = Join-Path $buildDir 'dex'
 New-Item -ItemType Directory -Path $dexDir -Force | Out-Null
 & (Join-Path $btPath 'd8.bat') --min-api 30 --output $dexDir --lib $androidJarPath `
-    --classpath $shizukuCp $classesJar 2>&1 | Where-Object { $_ -match 'Error|error|错误' } | ForEach-Object { Write-Host "  $_" }
+    --classpath $shizukuCp $classesJar $shizukuJar 2>&1 | Where-Object { $_ -match 'Error|error|错误' } | ForEach-Object { Write-Host "  $_" }
 if (-not (Test-Path (Join-Path $dexDir 'classes.dex'))) { throw 'd8 没有产出 classes.dex' }
 Write-Ok '  d8 完成'
 
