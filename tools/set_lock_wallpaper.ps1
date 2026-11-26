@@ -123,13 +123,16 @@ if (-not $remote) {
 
 # ---------------------------------------------------------------- 记录旧状态
 
-$before = ''
+$beforeLock = ''
+$beforeDesk = ''
 if ($SuCmd -ne $null) {
-    $before = ((Invoke-Root "stat -c %Y $LOCKFILE 2>/dev/null" 'lockmtime') | Out-String).Trim()
+    $beforeLock = ((Invoke-Root "stat -c %Y $LOCKFILE 2>/dev/null" 'lockmtime') | Out-String).Trim()
+    $beforeDesk = ((Invoke-Root "stat -c %Y /data/system/users/0/wallpaper 2>/dev/null" 'deskmtime') | Out-String).Trim()
 }
 
 # ---------------------------------------------------------------- 调用 LockWall
 
+if ($Desktop) { Write-Info '-Desktop：LockWall 会同时设置锁屏与桌面（which=3），系统随后删除 wallpaper_lock' }
 $extra = if ($Desktop) { ' --ez desktop true' } else { '' }
 Invoke-Adb @('logcat', '-c') | Out-Null
 Invoke-Adb @('shell', "am start -W -n $LOCKPKG/.Main --es path $remote$extra") | Out-Null
@@ -160,13 +163,49 @@ if ($SuCmd -eq $null) {
     return
 }
 
-$after = ((Invoke-Root "stat -c %Y $LOCKFILE 2>/dev/null" 'lockmtime') | Out-String).Trim()
-if (-not $after) { Write-Bad '未生成 wallpaper_lock，设置失败。'; return }
-if ($before -and $after -eq $before) {
-    Write-Warn2 "wallpaper_lock 时间戳未变化（$after），可能没有真正写入。"
-    return
+# 校验：
+#   -Desktop  → which=SYSTEM|LOCK，系统会删除 wallpaper_lock（锁屏跟随桌面），看 wallpaper
+#   只设锁屏   → 看 wallpaper_lock
+#   首选「把系统里那张图拉下来和源图做像素比对」，因为它不受「重复设同一张图时 mtime 不变」影响。
+$target = if ($Desktop) { '/data/system/users/0/wallpaper' } else { $LOCKFILE }
+$targetName = if ($Desktop) { 'wallpaper（桌面+锁屏）' } else { 'wallpaper_lock（锁屏）' }
+$beforeT = if ($Desktop) { $beforeDesk } else { $beforeLock }
+
+$afterT = ((Invoke-Root "stat -c %Y $target 2>/dev/null" 'wmtime') | Out-String).Trim()
+
+$pixelOk = $null
+if ($SuCmd -ne $null) {
+    $diffPy = Join-Path (Split-Path $PSScriptRoot -Parent) 'tests\pixel_diff.py'
+    if (Test-Path -LiteralPath $diffPy) {
+        try { $pyv = Resolve-Python } catch { $pyv = $null }
+        if ($pyv) {
+            $tmpW = Join-Path $env:TEMP 'wallpaper_check.bin'
+            Invoke-Root "cp $target /data/local/tmp/_wcheck.bin; chmod 644 /data/local/tmp/_wcheck.bin" 'wcheck' | Out-Null
+            Invoke-Adb @('pull', '/data/local/tmp/_wcheck.bin', $tmpW) | Out-Null
+            Invoke-Root 'rm -f /data/local/tmp/_wcheck.bin' 'wclean' | Out-Null
+            if (Test-Path -LiteralPath $tmpW) {
+                & $pyv -X utf8 $diffPy $tmpW $Image '6.0' | ForEach-Object { Write-Host ('  ' + $_) -ForegroundColor Gray }
+                $pixelOk = ($LASTEXITCODE -eq 0)
+            }
+        }
+    }
 }
-Write-Ok "锁屏壁纸已写入（wallpaper_lock 时间戳 $after）"
+
+if ($pixelOk -eq $true) {
+    Write-Ok "$targetName 已写入（像素比对一致，时间戳 $afterT）"
+}
+elseif ($pixelOk -eq $false) {
+    Write-Bad "$targetName 与源图不一致，可能没有真正写入。"
+}
+elseif (-not $afterT) {
+    Write-Bad "未生成 $targetName，设置失败。"
+}
+elseif ($beforeT -and $afterT -eq $beforeT) {
+    Write-Warn2 "$targetName 时间戳未变化（$afterT）；若刚设过同一张图属正常，否则可能没写入。"
+}
+else {
+    Write-Ok "$targetName 已写入（时间戳 $afterT）"
+}
 
 # 清理
 Invoke-Root "rm -f /data/data/$LOCKPKG/files/lock.jpg" 'cleanlock' | Out-Null

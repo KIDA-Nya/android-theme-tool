@@ -130,6 +130,47 @@ else {
     $fail++
 }
 
+# ---------------- extract_assets：资源提取 ----------------
+Write-Host ''
+Write-Host '=== extract_assets 资源提取测试 ===' -ForegroundColor Cyan
+
+$asFx = Join-Path $env:TEMP 'themetool_assetfx'
+$asOut = Join-Path $env:TEMP 'themetool_assetout'
+$mkAs = Join-Path $PSScriptRoot 'mk_asset_fixture.py'
+$exTool = Join-Path $repoRoot 'tools\extract_assets.py'
+if (Test-Path -LiteralPath $asFx) { Remove-Item -LiteralPath $asFx -Recurse -Force }
+if (Test-Path -LiteralPath $asOut) { Remove-Item -LiteralPath $asOut -Recurse -Force }
+& $py -X utf8 $mkAs $asFx | ForEach-Object { Write-Host ('  ' + $_) -ForegroundColor Gray }
+
+function Test-AssetExport {
+    param([string]$Theme, [string]$Label, [hashtable]$Expect)
+
+    $dir = Join-Path $asOut ([System.IO.Path]::GetFileNameWithoutExtension($Theme))
+    $txt = (& $py -X utf8 $exTool $Theme -o $dir *>&1) -join "`n"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host ("  [FAIL] {0} 提取失败`n{1}" -f $Label, $txt) -ForegroundColor Red
+        return $false
+    }
+    $ok = $true
+    foreach ($cat in $Expect.Keys) {
+        $count = @(Get-ChildItem -LiteralPath (Join-Path $dir $cat) -Recurse -File -ErrorAction SilentlyContinue).Count
+        if ($count -ne $Expect[$cat]) {
+            Write-Host ("  [FAIL] {0}/{1} 期望 {2} 个，实际 {3}" -f $Label, $cat, $Expect[$cat], $count) -ForegroundColor Red
+            $ok = $false
+        }
+    }
+    if ($ok) { Write-Host ("  [PASS] {0}：分类与数量正确" -f $Label) -ForegroundColor Green }
+    return $ok
+}
+
+# nested.theme：壁纸/图标在内嵌 zip 里，字体与铃声在顶层
+if (Test-AssetExport (Join-Path $asFx 'nested.theme') 'ColorOS 内嵌 zip' @{
+        wallpaper = 1; icons = 1; fonts = 1; ringtone = 1 }) { $pass++ } else { $fail++ }
+
+# flat.hwt：全部平铺
+if (Test-AssetExport (Join-Path $asFx 'flat.hwt') '华为平铺目录' @{
+        wallpaper = 1; icons = 1; fonts = 1 }) { $pass++ } else { $fail++ }
+
 # ---------------- 可选：真实 .theme ----------------
 $sample = $env:THEME_SAMPLE
 if (-not $sample) {

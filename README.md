@@ -194,6 +194,7 @@ theme
 │  ├─ adapters/            品牌适配器（coloros 可写入；miui/emui 只读）
 │  ├─ theme_align.py       补全模块声明
 │  ├─ theme_mix.py         混搭拼包（多主题取模块合成一个包）
+│  ├─ extract_assets.py    从 .theme/.mtz/.hwt 里拆出壁纸/图标/字体/铃声
 │  ├─ check_theme.py       应用前体检
 │  ├─ extract_keyguard.py  提取锁屏壁纸
 │  └─ newuuid.py           换 UUID（强制重应用）
@@ -276,6 +277,42 @@ ColorOS 的 `ThemeApplyService` **按包里声明的模块集合整体替换**�
 ```
 
 详见 [docs/USAGE.md](docs/USAGE.md) 第 7.5 节。
+
+---
+
+## 非 ColorOS 机型能做什么（间接方案）
+
+直接投递只有 ColorOS 走得通，但**资源是通用的**。这版加了 `extract_assets.py`：
+
+```powershell
+python tools/extract_assets.py 主题包 -o 导出目录      # 拆出资源
+python tools/extract_assets.py 主题包 --list          # 只看清单
+```
+
+实测输出：
+
+```
+ColorOS .theme → [wallpaper] 3 个 / [icons] 473 个 / [ui] 325 个
+华为 .hwt      → [wallpaper] 3 个 / [icons] 55 个  / [ui] 24 个
+```
+
+拿到壁纸后，**任何品牌**都能用它设壁纸（走系统 `WallpaperManager`，与主题栈无关）：
+
+```powershell
+.\tools\set_lock_wallpaper.ps1 -Image 导出的壁纸.jpg            # 只设锁屏
+.\tools\set_lock_wallpaper.ps1 -Image 导出的壁纸.jpg -Desktop   # 桌面+锁屏
+```
+
+能力边界（诚实版）：
+
+| 能力 | ColorOS | MIUI / HyperOS | 华为 / 荣耀 |
+|---|---|---|---|
+| 整包应用 | ✅ 已实现 | ❌ 无对外接口 | ❌ 未验证 |
+| 提取资源（壁纸/图标/字体/铃声） | ✅ | ✅ | ✅ |
+| 设壁纸（桌面+锁屏） | ✅ | ✅ 走同一 API | ✅ 走同一 API |
+| 图标包 | ✅ 随整包 | ⚠️ 仅 App 内调 `ThemeService` | ❌ |
+| 字体 | ❌ 未实现 | ❌ | ❌ 需 root |
+| 铃声 | ⚠️ 标准键可写但 ColorOS 不读（实测 `null`） | 未测 | 未测 |
 
 ---
 

@@ -241,6 +241,30 @@ python tools\theme_mix.py -o mixed.theme 底包.theme icons:别的.theme --new-u
 
 ---
 
+## 7.8 非 ColorOS 机型：拆资源 + 设壁纸
+
+直接投递用不了，但可以"间接"用：
+
+```powershell
+# 1) 把包里的东西拆出来
+python tools/extract_assets.py 主题包 -o 导出目录
+
+# 2) 用其中一张图设壁纸（任意品牌都行，走 WallpaperManager）
+.\tools\set_lock_wallpaper.ps1 -Image 导出目录\wallpaper\xxx.jpg
+.\tools\set_lock_wallpaper.ps1 -Image 导出目录\wallpaper\xxx.jpg -Desktop
+```
+
+能拆的类别：`wallpaper`（壁纸）、`icons`（图标包）、`fonts`（字体）、`ringtone`（铃声）、
+`ui`（模块 UI 素材，一般用不上）。
+
+实测：ColorOS 主题拆出 3 张壁纸 + 473 个图标 + 325 个 UI 素材；
+华为 `.hwt` 拆出 3 张壁纸 + 55 个图标 + 24 个 UI 素材。
+
+注意：`-Desktop` 时系统会删掉 `wallpaper_lock`（锁屏跟随桌面），这是正常行为；
+脚本会用像素比对确认是否真的写进去了。
+
+---
+
 ## 8. 出问题怎么查
 
 **先跑体检**（菜单 `[1]` 或 `python tools/check_theme.py 主题.theme --device-version <版本号>`），
