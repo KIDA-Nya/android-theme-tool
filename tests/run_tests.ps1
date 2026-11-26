@@ -71,6 +71,65 @@ foreach ($c in $cases) {
     }
 }
 
+# ---------------- theme_mix：拼包 ----------------
+Write-Host ''
+Write-Host '=== theme_mix 拼包测试 ===' -ForegroundColor Cyan
+
+$mixFx = Join-Path $env:TEMP 'themetool_mixfx'
+$mixOut = Join-Path $env:TEMP 'themetool_mix.theme'
+if (Test-Path -LiteralPath $mixFx) { Remove-Item -LiteralPath $mixFx -Recurse -Force }
+if (Test-Path -LiteralPath $mixOut) { Remove-Item -LiteralPath $mixOut -Force }
+
+$mkMix = Join-Path $PSScriptRoot 'mk_mix_fixtures.py'
+$mixTool = Join-Path $repoRoot 'tools\theme_mix.py'
+$checkMix = Join-Path $PSScriptRoot 'check_mix.py'
+
+& $py -X utf8 $mkMix $mixFx | ForEach-Object { Write-Host ('  ' + $_) -ForegroundColor Gray }
+$a = Join-Path $mixFx 'a.theme'
+$b = Join-Path $mixFx 'b.theme'
+$mixOutText = (& $py -X utf8 $mixTool -o $mixOut $a "icons:$b" "com.android.settings:$b" 2>&1) -join "`n"
+$mixCode = $LASTEXITCODE
+
+if ($mixCode -eq 0 -and (Test-Path -LiteralPath $mixOut)) {
+    $chkOut = (& $py -X utf8 $checkMix $mixOut *>&1) -join "`n"
+    $chkCode = $LASTEXITCODE
+    if ($chkCode -eq 0) {
+        Write-Host '  [PASS] theme_mix 替换内容与声明版本都正确' -ForegroundColor Green
+        $pass++
+    }
+    else {
+        Write-Host '  [FAIL] theme_mix 输出校验不符' -ForegroundColor Red
+        Write-Host $chkOut -ForegroundColor DarkGray
+        $fail++
+    }
+}
+else {
+    Write-Host "  [FAIL] theme_mix 执行失败（exit=$mixCode）" -ForegroundColor Red
+    Write-Host $mixOutText -ForegroundColor DarkGray
+    $fail++
+}
+
+# --only 子集
+$onlyOut = Join-Path $env:TEMP 'themetool_only.theme'
+if (Test-Path -LiteralPath $onlyOut) { Remove-Item -LiteralPath $onlyOut -Force }
+$onlyText = (& $py -X utf8 $mixTool -o $onlyOut $a '--only' 'icons' 2>&1) -join "`n"
+if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $onlyOut)) {
+    $listTool = Join-Path $PSScriptRoot 'list_entries.py'
+    $names = (& $py -X utf8 $listTool $onlyOut | Out-String).Trim()
+    if ($names -eq 'icons') {
+        Write-Host '  [PASS] --only 只保留指定模块' -ForegroundColor Green
+        $pass++
+    }
+    else {
+        Write-Host "  [FAIL] --only 输出条目不对：$names" -ForegroundColor Red
+        $fail++
+    }
+}
+else {
+    Write-Host "  [FAIL] --only 执行失败（exit=$LASTEXITCODE）" -ForegroundColor Red
+    $fail++
+}
+
 # ---------------- 可选：真实 .theme ----------------
 $sample = $env:THEME_SAMPLE
 if (-not $sample) {

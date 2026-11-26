@@ -162,6 +162,18 @@ theme
 | **锁屏图不可读** | 日志 `from=asset`，锁屏没变 | `/data/local/tmp` 对普通应用不可读；改为写入应用私有目录 |
 | **版本不匹配** | 中止在 `ThemeOSVersion is diff` | `EditorVersion` 必须等于 `ro.oplus.theme.version`，体检会提示 |
 
+## 能力清单
+
+| 能力 | 入口 | 说明 |
+|---|---|---|
+| 整包应用 | `apply_local_theme.ps1 -Theme x.theme` | 自动对齐声明、自动解冻 |
+| 只应用部分模块 | `-Only icons,wallpaper` | 其余模块回系统默认（引擎按集合整体替换） |
+| 混搭（替换单模块） | `-Mix icons:别的.theme` | 其它模块保持不变 |
+| 备份 / 恢复 | `-Backup` / `-Restore` | 快照 `/data/theme`，需 root |
+| 换 UUID | `tools/newuuid.py` 或 `--new-uuid` | 规避同 UUID 空转 |
+| 锁屏壁纸 | `set_lock_wallpaper.ps1` | 提取主题内的 keyguard 图单独设置 |
+| 包体检 | `check_package.ps1` | `.theme` / `.mtz` / `.hwt` 通吃 |
+
 ---
 
 ## 目录结构
@@ -181,6 +193,7 @@ theme
 │  ├─ check_package.ps1    统一包体检（.theme/.mtz/.hwt 自动选适配器）
 │  ├─ adapters/            品牌适配器（coloros 可写入；miui/emui 只读）
 │  ├─ theme_align.py       补全模块声明
+│  ├─ theme_mix.py         混搭拼包（多主题取模块合成一个包）
 │  ├─ check_theme.py       应用前体检
 │  ├─ extract_keyguard.py  提取锁屏壁纸
 │  └─ newuuid.py           换 UUID（强制重应用）
@@ -242,6 +255,27 @@ theme --probe              # 手机端
 
 想了解能不能扩展到小米/华为，见 [docs/UNIVERSAL.md](docs/UNIVERSAL.md)；
 机型细节见 [docs/PORTABILITY.md](docs/PORTABILITY.md)。
+
+---
+
+## 混搭与子集（引擎按集合整体替换）
+
+ColorOS 的 `ThemeApplyService` **按包里声明的模块集合整体替换**。实测：应用一个只声明
+`icons`、`wallpaper` 的包后，`/data/theme` 就只剩这两项，其它模块被清掉（回系统默认）。
+
+| 我想要 | 命令 | 结果 |
+|---|---|---|
+| 只改图标，其它保持不变 | `-Mix icons:别的.theme` | 包内仍含全部模块，只换 icons |
+| 只留图标，其它回默认 | `-Only icons` | 包里只有 icons |
+
+```powershell
+.\tools\apply_local_theme.ps1 -Theme '.\底包.theme' -Mix 'icons:D:\别的主题.theme'
+.\tools\apply_local_theme.ps1 -Theme '.\完整.theme' -Only icons,wallpaper
+.\tools\apply_local_theme.ps1 -Backup      # 快照 /data/theme（需 root）
+.\tools\apply_local_theme.ps1 -Restore     # 恢复最新快照
+```
+
+详见 [docs/USAGE.md](docs/USAGE.md) 第 7.5 节。
 
 ---
 

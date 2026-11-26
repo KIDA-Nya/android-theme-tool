@@ -234,6 +234,52 @@ function Do-FillModules {
     Pause2
 }
 
+function Do-Mix {
+    Title '混搭 / 只应用部分模块'
+    $base = Pick-Theme
+    if (-not $base) { return }
+
+    Write-Host '   [1] 只保留指定模块（其余恢复系统默认）'
+    Write-Host '   [2] 用另一个主题的某个模块替换（其它模块保持不变）'
+    $m = (Read-Host '   选择').Trim()
+    $extra = @()
+
+    if ($m -eq '1') {
+        $mods = (Read-Host '   要保留的模块（逗号分隔，如 icons,wallpaper）').Trim()
+        if (-not $mods) { return }
+        $extra = @('-Only', $mods)
+    }
+    elseif ($m -eq '2') {
+        $mod = (Read-Host '   要替换的模块名（如 icons）').Trim()
+        if (-not $mod) { return }
+        Info '选择提供该模块的主题文件'
+        $src = Select-ThemeFile
+        if (-not $src) { return }
+        $extra = @('-Mix', ("{0}:{1}" -f $mod, $src))
+    }
+    else { return }
+
+    $apply = Join-Path $here 'apply_local_theme.ps1'
+    & $apply -Theme $base @extra
+    Pause2
+}
+
+function Do-BackupTheme {
+    Title '备份当前主题'
+    $apply = Join-Path $here 'apply_local_theme.ps1'
+    & $apply -Backup
+    Pause2
+}
+
+function Do-RestoreTheme {
+    Title '从快照恢复'
+    Warn2 '会覆盖 /data/theme 并重启桌面与 SystemUI'
+    $snap = (Read-Host '   快照路径（回车=用最新的）').Trim('"', ' ')
+    $apply = Join-Path $here 'apply_local_theme.ps1'
+    if ($snap) { & $apply -Restore -Snapshot $snap } else { & $apply -Restore }
+    Pause2
+}
+
 function Do-SetPath {
     Title '指定主题文件'
     Info '选好后，上面的「体检 / 应用 / 锁屏 / 补齐」都会直接用这个文件'
@@ -284,7 +330,10 @@ function Main-Menu {
         Write-Host '   [5]  恢复系统默认主题'
         Write-Host '   [6]  按内容补齐缺失模块（需 root）'
         Write-Host '   [7]  指定主题文件路径…'
-        Write-Host '   [8]  使用说明'
+        Write-Host '   [8]  混搭 / 只应用部分模块'
+        Write-Host '   [9]  备份当前主题（快照）'
+        Write-Host '   [R]  从快照恢复'
+        Write-Host '   [H]  使用说明'
         Write-Host '   [0]  退出'
         Line
         $c = (Read-Host '   请输入序号').Trim()
@@ -296,7 +345,12 @@ function Main-Menu {
             '5' { Do-Revert }
             '6' { Do-FillModules }
             '7' { Do-SetPath }
-            '8' { Show-Help }
+            '8' { Do-Mix }
+            '9' { Do-BackupTheme }
+            'r' { Do-RestoreTheme }
+            'R' { Do-RestoreTheme }
+            'h' { Show-Help }
+            'H' { Show-Help }
             '0' { return }
         }
     }

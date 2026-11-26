@@ -50,6 +50,14 @@ param(
     [switch]$Ask,
     [switch]$Root,
     [switch]$KeepRemote,
+    [Parameter(ParameterSetName = 'Backup', Mandatory = $true)]
+    [switch]$Backup,
+    [Parameter(ParameterSetName = 'Restore', Mandatory = $true)]
+    [switch]$Restore,
+    [string]$Snapshot = '',
+    [string[]]$Only = @(),
+    [string[]]$Mix = @(),
+    [switch]$NewUuid,
     [string]$Device = ''
 )
 
@@ -134,6 +142,101 @@ function Show-ThemeState {
     return $names
 }
 
+function Invoke-ThemeMix {
+    <#
+      用 theme_mix.py 生成派生主题包：
+        -Only  只保留指定模块
+        -Mix   用 'MODULE:PATH' 替换某模块
+    #>
+    param([string]$BasePath, [string[]]$OnlyModules, [string[]]$MixSpecs, [switch]$Rotate)
+
+    $mixPy = Join-Path $PSScriptRoot 'theme_mix.py'
+    if (-not (Test-Path -LiteralPath $mixPy)) { throw "找不到 theme_mix.py：$mixPy" }
+
+    $py = Resolve-Python
+    $out = Join-Path $env:TEMP ('mix_' + [System.IO.Path]::GetFileNameWithoutExtension($BasePath) + '_' + [guid]::NewGuid().ToString('N').Substring(0, 6) + '.theme')
+    $cliArgs = @('-X', 'utf8', $mixPy, '-o', $out, $BasePath)
+    if ($MixSpecs) { $cliArgs += $MixSpecs }
+    if ($OnlyModules) { $cliArgs += '--only'; $cliArgs += $OnlyModules }
+    if ($Rotate) { $cliArgs += '--new-uuid' }
+
+    & $py @cliArgs | ForEach-Object { Write-Info $_ }
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $out)) { throw '拼包失败' }
+    Write-Ok "拼包完成：$out"
+    return $out
+}
+
+$script:SnapDir = '/sdcard/Download/theme_backup'
+
+function Invoke-ThemeBackup {
+    <# 快照 /data/theme 与主题相关设置 #>
+    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $tar = "$script:SnapDir/theme-$stamp.tar"
+    $json = "$script:SnapDir/theme-$stamp.json"
+
+    $uuid = (Get-Setting global 'applied_default_theme_package_name')
+    $ver = ((Invoke-Adb @('shell', 'getprop ro.oplus.theme.version')) | Out-String).Trim()
+    $payload = (@{ uuid = $uuid; themeVersion = $ver; createdAt = $stamp } | ConvertTo-Json -Compress)
+    $local = Join-Path $env:TEMP "theme-backup-$stamp.json"
+    [System.IO.File]::WriteAllText($local, $payload, (New-Object System.Text.UTF8Encoding($false)))
+
+    $body = @"
+mkdir -p $script:SnapDir || exit 1
+cd /data || exit 1
+tar -cf "$tar" theme || exit 1
+echo OK
+"@
+    $r = ((Invoke-Root $body 'backup') | Out-String)
+    if ($r -notmatch 'OK') { throw "快照失败：$r" }
+
+    Invoke-Adb @('push', $local, $json) | Out-Null
+    Remove-Item -LiteralPath $local -Force -ErrorAction SilentlyContinue
+    Write-Ok "已备份：$tar"
+    Write-Info "  附带设置：$json"
+    Write-Info "  恢复用：-Restore -Snapshot `"$tar`""
+    return $tar
+}
+
+function Invoke-ThemeRestore {
+    <# 从快照恢复 /data/theme，并同步设置与刷新界面 #>
+    param([string]$SnapshotPath)
+
+    if (-not $SnapshotPath) {
+        $list = ((Invoke-Adb @('shell', "ls -1t $script:SnapDir/theme-*.tar 2>/dev/null | head -1")) | Out-String).Trim()
+        if (-not $list) { throw "在 $script:SnapDir 下没有找到快照，请用 -Snapshot 指定" }
+        $SnapshotPath = $list
+    }
+    Write-Info "快照：$SnapshotPath"
+
+    $jsonPath = [regex]::Replace($SnapshotPath, '\.tar$', '.json')
+    $uid = ((Invoke-Root 'stat -c %u /data/data/com.oplus.uxdesign' 'uid') | Out-String).Trim()
+    if ($uid -notmatch '^\d+$') { throw '拿不到 uxdesign 的 uid，无法恢复属主' }
+
+    $body = @"
+[ -f "$SnapshotPath" ] || { echo "MISSING"; exit 1; }
+cd /data || exit 1
+tar -xpf "$SnapshotPath" || exit 1
+chown -R $uid`:$uid /data/theme || exit 1
+echo DONE
+"@
+    $r = ((Invoke-Root $body 'restore') | Out-String)
+    if ($r -notmatch 'DONE') { throw "恢复失败：$r" }
+
+    # 同步设置
+    $j = ((Invoke-Adb @('shell', "cat '$jsonPath' 2>/dev/null")) | Out-String).Trim()
+    if ($j -match '"uuid"') {
+        try {
+            $meta = $j | ConvertFrom-Json
+            if ($meta.uuid) { Set-Setting global 'applied_default_theme_package_name' $meta.uuid }
+        }
+        catch { Write-Warn2 '快照的 json 解析失败，跳过设置同步' }
+    }
+
+    Invoke-Adb @('shell', 'am force-stop com.android.launcher') | Out-Null
+    Invoke-Adb @('shell', 'pkill -f com.android.systemui') | Out-Null
+    Write-Ok '已恢复，并重启桌面与 SystemUI 触发重载'
+}
+
 function Get-ZipModules {
     <# 返回 zip 里真实存在的模块基名（如 icons / com.android.settings），不含 themeInfo.xml 与 picture #>
     param([string]$Path)
@@ -171,6 +274,19 @@ function Test-ModulesApplied {
 $hasRoot = Initialize-Device -Device $Device
 $PKG = $script:ThemePkg
 $SVC = $script:ThemeSvc
+
+if ($Backup) {
+    if (-not $hasRoot) { Write-Bad '备份需要 root（要读 /data/theme）'; return }
+    Invoke-ThemeBackup | Out-Null
+    return
+}
+
+if ($Restore) {
+    if (-not $hasRoot) { Write-Bad '恢复需要 root（要写 /data/theme 并改属主）'; return }
+    try { Invoke-ThemeRestore -SnapshotPath $Snapshot; Write-Ok '恢复完成' }
+    catch { Write-Bad $_.Exception.Message }
+    return
+}
 if ($Root -and -not $hasRoot) {
     Write-Warn2 '要求 root 但未取得，将以 shell 身份继续（无法解冻进程，失败时请重试）'
 }
@@ -217,6 +333,25 @@ if ($info.Editor -ne $devVer) {
     Write-Info '  解决：换适配本机版本的主题，或改 themeInfo.xml 的 EditorVersion 后重新打包。'
     $answer = Read-Host '  仍要继续？(y/N)'
     if ($answer -notmatch '^[yY]') { Write-Bad '已取消'; return }
+}
+
+# ---------------------------------------------------------------- 拼包（混搭 / 子集）
+
+if ($Only.Count -gt 0 -or $Mix.Count -gt 0) {
+    Write-Step '拼包（混搭 / 子集）...'
+    try {
+        $mixed = Invoke-ThemeMix -BasePath $fi.FullName -OnlyModules $Only -MixSpecs $Mix -Rotate:$NewUuid
+        $fi = Get-Item -LiteralPath $mixed
+        $info = Get-ThemeInfo $fi.FullName
+        Write-Info ("拼包后声明 {0} 项 — {1}" -f $info.Pkgs.Count, ($info.Pkgs -join ', '))
+    }
+    catch {
+        Write-Bad $_.Exception.Message
+        return
+    }
+}
+elseif ($NewUuid) {
+    Write-Warn2 '-NewUuid 需与 -Only / -Mix 一起用；单独换 UUID 请用 tools/newuuid.py'
 }
 
 # ---------------------------------------------------------------- 对齐声明

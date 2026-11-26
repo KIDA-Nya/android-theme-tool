@@ -174,6 +174,73 @@ theme --lock-only xxx.theme
 
 ---
 
+## 7.5 混搭 / 只应用部分模块 / 备份恢复
+
+### 先理解引擎的行为
+
+ColorOS 的 `ThemeApplyService` **按"包里声明的模块集合"整体替换**，不是增量合并：
+
+> 应用一个只声明了 `icons`、`wallpaper` 的包后，`/data/theme` 里就只剩这两项，
+> 原来的 systemui / settings 等会被清掉（等于回到系统默认）。
+
+实测记录（本机）：
+
+```
+只声明 icons + wallpaper 应用后
+/data/theme → applying config icons wallpaper
+```
+
+所以两种需求要选对方式：
+
+| 我想要 | 用哪个 | 结果 |
+|---|---|---|
+| 只改图标，其它**保持不变** | `-Mix icons:其它主题.theme` | 生成的包仍含全部模块，只换 icons |
+| 只留图标，其它**回默认** | `-Only icons` | 包里只有 icons，其余被清掉 |
+
+### 混搭（替换某个模块，其余不动）
+
+```powershell
+# 底包用完整主题，把 icons 换成另一个主题的
+.\tools\apply_local_theme.ps1 -Theme '.\底包.theme' -Mix 'icons:D:\别的主题.theme'
+
+# 同时换两个模块
+.\tools\apply_local_theme.ps1 -Theme '.\底包.theme' -Mix 'icons:a.theme','com.android.systemui:b.theme'
+```
+
+只生成包不应用：
+
+```powershell
+python tools\theme_mix.py -o mixed.theme 底包.theme icons:别的.theme --dry-run
+python tools\theme_mix.py -o mixed.theme 底包.theme icons:别的.theme --new-uuid
+```
+
+### 子集（只要某几个模块）
+
+```powershell
+.\tools\apply_local_theme.ps1 -Theme '.\完整.theme' -Only icons,wallpaper
+```
+
+### 备份与恢复（需 root）
+
+```powershell
+.\tools\apply_local_theme.ps1 -Backup     # 快照 /data/theme + 当前 UUID
+.\tools\apply_local_theme.ps1 -Restore    # 用最新快照恢复
+.\tools\apply_local_theme.ps1 -Restore -Snapshot '/sdcard/Download/theme_backup/theme-2026....tar'
+```
+
+快照落在 `/sdcard/Download/theme_backup/`，同时生成同名 `.json` 记录 UUID 与主题版本。
+恢复时会：解包 → 改回 uxdesign 属主 → 同步 UUID 设置 → 重启桌面与 SystemUI 触发重载。
+
+实测：
+
+```
+备份前 /data/theme: applying com.android.contacts com.android.launcher ... icons wallpaper
+只应用 icons+wallpaper → /data/theme: applying config icons wallpaper
+-Restore 后            → /data/theme: applying com.android.contacts ... icons wallpaper（8 项全回）
+```
+
+---
+
 ## 8. 出问题怎么查
 
 **先跑体检**（菜单 `[1]` 或 `python tools/check_theme.py 主题.theme --device-version <版本号>`），
