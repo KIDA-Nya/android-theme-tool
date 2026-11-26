@@ -85,6 +85,7 @@ function Get-AdapterForPackage {
         '.theme' { return Get-Adapter -Name 'coloros' }
         '.mtz' { return Get-Adapter -Name 'miui' }
         '.hwt' { return Get-Adapter -Name 'emui' }
+        '.hnt' { return Get-Adapter -Name 'emui' }   # 新荣耀 MagicOS 的格式
         '.itz' { return Get-Adapter -Name 'vivo' }
     }
 

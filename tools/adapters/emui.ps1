@@ -7,8 +7,9 @@
 function Get-EmuiAdapter {
     return [pscustomobject]@{
         Name          = 'emui'
-        DisplayName   = 'EMUI / HarmonyOS（华为 / 荣耀）'
+        DisplayName   = 'EMUI / HarmonyOS / MagicOS（华为 / 荣耀）'
         SupportsApply = $false
+        # 华为：/data/themes/<id>/；荣耀（新）：/sdcard/Android/data/com.hihonor.android.thememanager/files/Download/Honor/Themes
         ThemeDir      = '/data/themes'
         Descriptor    = 'description.xml'
         Note          = '只读：平台探测与 .hwt 包体检；写入未实现'
@@ -37,6 +38,14 @@ function Get-EmuiAdapter {
             $dir = ((Invoke-Adb @('shell', 'ls -d /data/themes 2>/dev/null')) | Out-String).Trim()
             if ($dir) { [void]$evidence.Add('/data/themes: 存在') } else { [void]$evidence.Add('/data/themes: 不存在或不可读') }
 
+            # 新荣耀走自己的主题 App 与目录
+            $honor = '/sdcard/Android/data/com.hihonor.android.thememanager/files/Download/Honor/Themes'
+            $hdir = ((Invoke-Adb @('shell', "ls -d $honor 2>/dev/null")) | Out-String).Trim()
+            if ($hdir) { [void]$evidence.Add("荣耀主题目录: $honor") }
+
+            $magic = ((Invoke-Adb @('shell', 'getprop ro.build.version.magic')) | Out-String).Trim()
+            if ($magic) { [void]$evidence.Add("ro.build.version.magic = $magic") }
+
             $result.Present = $true
             $result.Package = ($(if ($hit) { $hit[0] } else { '' }))
             $result.Evidence = @($evidence)
@@ -58,8 +67,15 @@ function Get-EmuiAdapter {
             $info['File'] = [System.IO.Path]::GetFileName($full)
             $info['Size'] = (Get-Item -LiteralPath $full).Length
 
-            if ([System.IO.Path]::GetExtension($full).ToLowerInvariant() -ne '.hwt') {
-                [void]$problems.Add('扩展名不是 .hwt —— 华为主题包需要 .hwt 后缀')
+            $ext = [System.IO.Path]::GetExtension($full).ToLowerInvariant()
+            if ($ext -notin @('.hwt', '.hnt')) {
+                [void]$problems.Add('扩展名不是 .hwt / .hnt —— 华为要 .hwt，新荣耀（2023-11 之后）用 .hnt')
+            }
+            elseif ($ext -eq '.hnt') {
+                $info['Edition'] = 'Honor (.hnt)'
+            }
+            elseif ($ext -eq '.hwt') {
+                $info['Edition'] = 'Huawei (.hwt)'
             }
 
             $zip = $null

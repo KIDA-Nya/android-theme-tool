@@ -106,6 +106,25 @@ foreach ($c in $catalog) {
     Add-Row ("其他平台/{0}" -f $c.Name) (($c.Evidence | Select-Object -First 2) -join '; ') 'INFO'
 }
 
+# 没有适配器时，至少告诉用户这是什么品牌（免得以为工具坏了）
+if (-not $hit) {
+    $brand = ''
+    $props = @{
+        'meizu'   = @('ro.meizu.product.model', 'ro.build.flyme.version')
+        'samsung' = @('ro.build.version.oneui', 'ro.build.version.sem')
+        'nubia'   = @('ro.nubia.version', 'ro.build.nubia.rom.name', 'ro.redmagic.version')
+        'moto'    = @('ro.mot.build.product', 'ro.mot.build.version.sdk')
+    }
+    foreach ($name in $props.Keys) {
+        foreach ($k in $props[$name]) {
+            $v = ((Invoke-Adb @('shell', "getprop $k")) | Out-String).Trim()
+            if ($v) { $brand = "$name（$k=$v）"; break }
+        }
+        if ($brand) { break }
+    }
+    if ($brand) { Add-Row '品牌识别' $brand 'INFO' }
+}
+
 # ---------------------------------------------------------------- uxdesign
 $ux = ((Invoke-Adb @('shell', 'pm list packages com.oplus.uxdesign')) | Out-String)
 $hasUx = $ux -match 'com\.oplus\.uxdesign'

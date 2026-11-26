@@ -26,7 +26,7 @@
 #>
 param(
     [Parameter(Mandatory = $true)][string]$Theme,
-    [ValidateSet('auto', 'coloros', 'miui', 'huawei', 'vivo')][string]$Platform = 'auto',
+    [ValidateSet('auto', 'coloros', 'miui', 'huawei', 'honor', 'vivo')][string]$Platform = 'auto',
     [switch]$NoOpen,
     [string]$Device = ''
 )
@@ -44,7 +44,8 @@ if ($Platform -eq 'auto') {
     $pkgs = ((Invoke-Adb @('shell', 'pm list packages')) | Out-String)
     if ($pkgs -match 'com\.heytap\.themestore|com\.oplus\.themestore') { $Platform = 'coloros' }
     elseif ($pkgs -match 'com\.android\.thememanager') { $Platform = 'miui' }
-    elseif ($pkgs -match 'com\.huawei\.android\.thememanager|com\.hihonor\..*thememanager') { $Platform = 'huawei' }
+    elseif ($pkgs -match 'com\.hihonor\.android\.thememanager') { $Platform = 'honor' }
+    elseif ($pkgs -match 'com\.huawei\.android\.thememanager') { $Platform = 'huawei' }
     elseif ($pkgs -match 'com\.bbk\.theme|com\.vivo\.themestore') { $Platform = 'vivo' }
     else { $Platform = 'unknown' }
 }
@@ -78,6 +79,30 @@ switch ($Platform) {
         Write-Info '  2) 找到刚放进去的主题 → 点「应用」'
         Write-Host ''
         Write-Warn2 '注意：鸿蒙 5 / 高版本 MagicOS 已收紧该目录，可能扫不到（社区反馈）'
+        return
+    }
+
+    'honor' {
+        # 新荣耀（2023-11 之后出厂）用自己的主题 App 与 .hnt 格式
+        $dest = '/sdcard/Android/data/com.hihonor.android.thememanager/files/Download/Honor/Themes'
+        Invoke-Adb @('shell', "mkdir -p $dest") | Out-Null
+        $remote = "$dest/$($fi.Name)"
+        $r = (Invoke-Adb @('push', $fi.FullName, $remote)) | Out-String
+        if ($r -notmatch 'pushed|skipped') { Write-Bad "推送失败：$($r.Trim())"; return }
+        Write-Ok "已放入：$remote"
+
+        if (-not $NoOpen) {
+            Invoke-Adb @('shell', 'monkey -p com.hihonor.android.thememanager -c android.intent.category.LAUNCHER 1') | Out-Null
+            Start-Sleep -Seconds 2
+        }
+
+        Write-Host ''
+        Write-Step '接下来手动两步'
+        Write-Info '  1) 荣耀主题 App → 我的 → 主题'
+        Write-Info '  2) 找到刚放进去的主题 → 应用'
+        Write-Host ''
+        Write-Warn2 '新荣耀用 .hnt；.hwt 是否还能被识别取决于机型（2023-11 之后出厂的多数只认 .hnt）'
+        Write-Info '  也有人在 MagicOS 6+ 上反馈第三方主题识别变差，必要时重启或降级主题 App'
         return
     }
 

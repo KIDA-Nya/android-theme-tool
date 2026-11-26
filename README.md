@@ -6,8 +6,11 @@
 |---|---|---|
 | **ColorOS**（OPPO / 一加 / realme） | `.theme` | **整包应用**、混搭、子集、备份恢复（真机验证） |
 | **MIUI / HyperOS**（小米 / Redmi / POCO） | `.mtz` | 平台探测 + 包体检 + 免 root 注入 Theme backup（**未真机验证**） |
-| **EMUI / HarmonyOS**（华为 / 荣耀） | `.hwt` | 平台探测 + 包体检 + 放 `Huawei/Themes` 交给商店导入 |
+| **EMUI / HarmonyOS**（华为） | `.hwt` | 平台探测 + 包体检 + 放 `Huawei/Themes` 交给商店导入 |
+| **MagicOS**（荣耀，2023-11 后） | `.hnt` | 平台探测 + 包体检 + 放荣耀主题目录 |
 | **OriginOS**（vivo / iQOO） | `.itz` | 平台探测 + 包体检 + 放 Download 交给 i主题 导入 |
+
+子品牌（realme / Redmi / POCO / iQOO）与未适配品牌（魅族 / 三星 / 努比亚·红魔）的归属与依据，见 **[docs/BRANDS.md](docs/BRANDS.md)**。
 
 **不改包、不重签、不需要 LSPosed。** ColorOS 这条路是直接调用系统自带的主题商店服务，
 等价于在商店里点「应用」；其它平台则是"让商店自己完成"，权限始终留在商店手里。
@@ -221,7 +224,8 @@ theme
    ├─ USAGE.md             使用手册（四种一键方式 + 场景 + 排错）
    ├─ PORTABILITY.md       可移植性与健壮性（换机型看这个）
    ├─ UNIVERSAL.md         跨品牌通用策略调研与适配器架构
-   ├─ VENDOR-FINDINGS.md   MIUI / EMUI 的真实包实测记录
+   ├─ VENDOR-FINDINGS.md   MIUI / EMUI / vivo 的真实包实测记录
+   ├─ BRANDS.md            品牌与子品牌支持矩阵
    └─ PHONE.md             手机端说明
 ```
 

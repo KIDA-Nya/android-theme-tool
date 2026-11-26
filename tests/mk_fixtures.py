@@ -81,6 +81,13 @@ def main(argv):
         "wallpaper/a.jpg": jpg,
     })
 
+    # 新荣耀 MagicOS 的 .hnt（结构与 hwt 相同，只是扩展名与 App 不同）
+    mk(out, "good.hnt", {
+        "description.xml": HWT_DESC,
+        "wallpaper/a.jpg": jpg,
+        "icons/com.example.app.png": png,
+    })
+
     # 不是主题包
     mk(out, "unknown.bin", {"readme.txt": "nothing here"})
 
