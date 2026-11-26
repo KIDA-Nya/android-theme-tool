@@ -32,7 +32,7 @@ function Say-Status {
 
 Write-Host ''
 Write-Host '=============================================' -ForegroundColor DarkCyan
-Write-Host '   ColorOS 主题工具 · 兼容性探测' -ForegroundColor DarkCyan
+Write-Host '   Android 主题工具 · 兼容性探测' -ForegroundColor DarkCyan
 Write-Host '=============================================' -ForegroundColor DarkCyan
 
 # ---------------------------------------------------------------- adb / 设备
@@ -171,6 +171,9 @@ else {
     Write-Host '  结论：完全可用' -ForegroundColor Green
 }
 Write-Host ''
-Write-Host '  说明：本方案依赖 ColorOS 主题栈（ThemeApplyService + uxdesign + /data/theme）。' -ForegroundColor DarkGray
-Write-Host '        华为/小米/三星等其它品牌没有这套组件，不适用。' -ForegroundColor DarkGray
+Write-Host '  平台：' -ForegroundColor DarkGray
+Write-Host '    ColorOS  可直接投递整包（ThemeApplyService + uxdesign + /data/theme）' -ForegroundColor DarkGray
+Write-Host '    MIUI     免 root 只能注入 Theme backup；整包无对外接口' -ForegroundColor DarkGray
+Write-Host '    华为     .hwt 放 Huawei/Themes 交给商店导入' -ForegroundColor DarkGray
+Write-Host '    vivo     .itz 交 i主题 本地主题导入；写入需私有 Binder' -ForegroundColor DarkGray
 Write-Host ''

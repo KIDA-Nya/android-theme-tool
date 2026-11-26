@@ -27,6 +27,7 @@
 | **大概率可用** | OPPO / 一加 / realme 的 ColorOS 12–16、realmeUI 3+ | 服务、uxdesign、`/data/theme` 结构一致 |
 | **需要试** | ColorOS 12/13/14 更早的小版本 | uxdesign 的 AIDL 版本可能不同，config 语义可能变 |
 | **不适用** | ColorOS 11 及更早 | 那时没有 uxdesign，走 `/data/system/theme` 本地解包，完全是另一套 |
+| **仅探测与体检** | vivo / iQOO（`.itz`） | 写入需私有 Binder，详见 [VENDOR-FINDINGS.md](VENDOR-FINDINGS.md) 第十节 |
 | **不适用** | 华为 / 荣耀（`.hwt`） | 主题引擎与包格式都不同 |
 | **不适用** | 小米 / Redmi（`.mtz`）、三星、原生 Android | 没有该服务与目录 |
 | **不适用** | 海外 OxygenOS / 部分国际版 | 主题实现不同，多数无该服务 |

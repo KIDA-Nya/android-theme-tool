@@ -481,3 +481,66 @@ re-sign 只会让签名对不上（这与 ColorOS 上"重签丢权限"是同一�
 
 ---
 
+## 十、vivo / iQOO（OriginOS）：查到的事实与边界
+
+没有真机，但找到了一个**高质量参考实现**：[VFont](https://github.com/SubmitCodes/VFont)
+（Shizuku、免 root、在**国行 vivo X200 Ultra / OriginOS 7 上物理验证过**）。
+
+### 包格式
+
+来自其 [docs/themes.md](https://github.com/SubmitCodes/VFont/blob/main/docs/themes.md)：
+
+> Import a local Vivo `.itz` under **Themes and wallpaper > Full themes**.
+> Supported archives use **ZIP storage and root `description.xml`**; archive names, paths,
+> sizes, XML, checksums and resource types are validated before native application.
+
+即：**`.itz` = zip + 根级 `description.xml`**，和华为 `.hwt` 同构（只是根节点与字段不同）。
+另有一条明确限制：
+
+> Themes containing bundled fonts are rejected; choose fonts separately.
+
+**自带字体的主题会被拒绝**——本项目适配器已把这条做成体检项。
+
+### 目录与包名
+
+| 项 | 值 | 来源 |
+|---|---|---|
+| 主题商店包名 | `com.bbk.theme`（i主题） | XDA 讨论、多个社区教程 |
+| 外部数据 | `/sdcard/Android/data/com.bbk.theme/`（`download/`、`files/.dwd`、`theme/lockscreen/` 等） | 同上 |
+| 核心存储 | `/data/bbkcore/theme/`（需 root） | 社区注入教程（利用文件管理目录穿越写入 `.dwd` 下） |
+
+### 为什么本项目不做写入
+
+VFont 的 [how-it-works](https://github.com/SubmitCodes/VFont/blob/main/docs/how-it-works.md) 写得很清楚：
+
+> VFont **discovers the required Vivo backup interface signatures and transaction IDs from
+> the installed framework**. It verifies stock UpSlide's identity, required features and
+> current state before dispatching a fixed bounded worker **as system UID 1000**.
+
+也就是说 vivo 的写入通道是**框架里的私有 Binder**，需要：
+1. 从设备的框架里反查接口签名与 transaction id（每个版本可能不同）
+2. 以 **system uid 1000** 派发（不是 shell 2000）
+3. 并且按其兼容性说明，只对特定机型/ROM 有效
+
+这不是"写个脚本"能覆盖的，且**我没有 vivo 真机**，无法验证任何一步。所以适配器只做只读。
+
+### 本项目对 vivo 的支持
+
+| 能力 | 状态 |
+|---|---|
+| 平台探测（`com.bbk.theme` + `ro.vivo.*` + 数据目录） | ✅ 已实现 |
+| `.itz` 包体检（description.xml、顶层模块、自带字体告警） | ✅ 已实现，有夹具测试 |
+| 交给商店导入 | ✅ `route_to_store.ps1`：推到 Download + 拉起 i主题，走「我的 → 主题 → 本地主题 → 导入」 |
+| 直接投递 | ❌ 未实现（需私有 Binder + 真机反查） |
+
+### 社区里的其它 vivo 路子（供参考）
+
+- **vivo主题修改器 / 小千vivo主题助手**：把 `.itz` 验证/重打包后导入，导入后出现在
+  「i主题 → 我的 → 主题 → 本地主题」，主题名会被改成固定名字（如「熊猫家族」）。
+  注意要求文件放在**内部存储**，SD 卡/OTG 不行。
+- **目录穿越注入**（B 站教程）：借文件管理器的路径穿越把 `.itz` 写进
+  `/data/bbkcore/theme/.dwd/...`，再在商店里下载同名主题后替换。依赖特定文件管理器的漏洞，
+  版本一变就失效，不建议依赖。
+
+---
+

@@ -67,6 +67,20 @@ def main(argv):
         "wallpaper/a.jpg": jpg,
     })
 
+    # 正常 vivo 包（.itz = zip + 根级 description.xml）
+    mk(out, "good.itz", {
+        "description.xml": '<VivoTheme><title>Test ITZ</title><author>tester</author></VivoTheme>',
+        "wallpaper/a.jpg": jpg,
+        "icons/com.example.app.png": png,
+    })
+
+    # 自带字体：已知参考实现会拒绝
+    mk(out, "hasfont.itz", {
+        "description.xml": '<VivoTheme><title>With Font</title></VivoTheme>',
+        "fonts/My.ttf": b"\x00\x01\x00\x00",
+        "wallpaper/a.jpg": jpg,
+    })
+
     # 不是主题包
     mk(out, "unknown.bin", {"readme.txt": "nothing here"})
 

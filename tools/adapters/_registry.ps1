@@ -13,6 +13,7 @@ $script:AdapterSpecs = @(
     @{ Name = 'coloros'; Prefix = 'Coloros'; File = 'coloros.ps1'; Order = 1 }
     @{ Name = 'miui'; Prefix = 'Miui'; File = 'miui.ps1'; Order = 2 }
     @{ Name = 'emui'; Prefix = 'Emui'; File = 'emui.ps1'; Order = 3 }
+    @{ Name = 'vivo'; Prefix = 'Vivo'; File = 'vivo.ps1'; Order = 4 }
 )
 
 # 注意：必须在**脚本作用域**里 dot-source，否则函数定义会随函数返回而丢失
@@ -84,6 +85,7 @@ function Get-AdapterForPackage {
         '.theme' { return Get-Adapter -Name 'coloros' }
         '.mtz' { return Get-Adapter -Name 'miui' }
         '.hwt' { return Get-Adapter -Name 'emui' }
+        '.itz' { return Get-Adapter -Name 'vivo' }
     }
 
     try {
@@ -91,7 +93,19 @@ function Get-AdapterForPackage {
         $zip = [System.IO.Compression.ZipFile]::OpenRead((Get-Item -LiteralPath $Path).FullName)
         try { $names = @($zip.Entries | ForEach-Object { $_.FullName }) } finally { $zip.Dispose() }
         if ($names -contains 'themeInfo.xml') { return Get-Adapter -Name 'coloros' }
-        if ($names -contains 'description.xml') { return Get-Adapter -Name 'emui' }
+        if ($names -contains 'description.xml') {
+            # 华为与 vivo 都用 description.xml，只能看根节点
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
+            $zip2 = [System.IO.Compression.ZipFile]::OpenRead((Get-Item -LiteralPath $Path).FullName)
+            try {
+                $e = $zip2.Entries | Where-Object { $_.FullName -eq 'description.xml' } | Select-Object -First 1
+                $sr = New-Object System.IO.StreamReader($e.Open())
+                try { $head = $sr.ReadToEnd() } finally { $sr.Dispose() }
+            }
+            finally { $zip2.Dispose() }
+            if ($head -match '<HwTheme') { return Get-Adapter -Name 'emui' }
+            return Get-Adapter -Name 'vivo'
+        }
     }
     catch { }
     return $null

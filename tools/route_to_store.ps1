@@ -26,7 +26,7 @@
 #>
 param(
     [Parameter(Mandatory = $true)][string]$Theme,
-    [ValidateSet('auto', 'coloros', 'miui', 'huawei')][string]$Platform = 'auto',
+    [ValidateSet('auto', 'coloros', 'miui', 'huawei', 'vivo')][string]$Platform = 'auto',
     [switch]$NoOpen,
     [string]$Device = ''
 )
@@ -45,6 +45,7 @@ if ($Platform -eq 'auto') {
     if ($pkgs -match 'com\.heytap\.themestore|com\.oplus\.themestore') { $Platform = 'coloros' }
     elseif ($pkgs -match 'com\.android\.thememanager') { $Platform = 'miui' }
     elseif ($pkgs -match 'com\.huawei\.android\.thememanager|com\.hihonor\..*thememanager') { $Platform = 'huawei' }
+    elseif ($pkgs -match 'com\.bbk\.theme|com\.vivo\.themestore') { $Platform = 'vivo' }
     else { $Platform = 'unknown' }
 }
 Write-Info "平台：$Platform"
@@ -77,6 +78,28 @@ switch ($Platform) {
         Write-Info '  2) 找到刚放进去的主题 → 点「应用」'
         Write-Host ''
         Write-Warn2 '注意：鸿蒙 5 / 高版本 MagicOS 已收紧该目录，可能扫不到（社区反馈）'
+        return
+    }
+
+    'vivo' {
+        $remote = "/sdcard/Download/$($fi.Name)"
+        $r = (Invoke-Adb @('push', $fi.FullName, $remote)) | Out-String
+        if ($r -notmatch 'pushed|skipped') { Write-Bad "推送失败：$($r.Trim())"; return }
+        Write-Ok "已放入：$remote"
+
+        if (-not $NoOpen) {
+            Invoke-Adb @('shell', 'monkey -p com.bbk.theme -c android.intent.category.LAUNCHER 1') | Out-Null
+            Start-Sleep -Seconds 2
+        }
+
+        Write-Host ''
+        Write-Step '接下来手动三步（i主题自己导入 + 应用）'
+        Write-Info '  1) i主题 → 我的 → 主题 → 本地主题 → 导入'
+        Write-Info '  2) 选 Download 里的这个 .itz'
+        Write-Info '  3) 导入后点「应用」'
+        Write-Host ''
+        Write-Warn2 '已知参考实现会拒绝「包内自带字体」的 itz，若导入失败可先去掉 fonts/'
+        Write-Info '  vivo 也有私有 Binder 写入通道，但需要真机反查接口，本项目未实现'
         return
     }
 

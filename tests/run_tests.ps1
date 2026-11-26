@@ -45,6 +45,8 @@ $cases = @(
     @{ File = 'good.hwt'; Expect = 0; MustContain = 'HwTheme' }
     @{ File = 'badroot.hwt'; Expect = 2; MustContain = '应为 HwTheme' }
     @{ File = 'unknown.bin'; Expect = 1; MustContain = '无法识别' }
+    @{ File = 'good.itz'; Expect = 0; MustContain = 'vivo 主题包' }
+    @{ File = 'hasfont.itz'; Expect = 2; MustContain = '自带字体' }
 )
 
 Write-Host ''

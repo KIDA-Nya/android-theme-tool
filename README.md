@@ -1,11 +1,18 @@
-# ColorOS 本地主题应用工具
+# Android 主题工具
 
-把本地的 `.theme` 主题包应用到 ColorOS（OPPO / 一加 / 真我）系统上。
+把本地主题包装进安卓手机。不同品牌能做到的深度不一样，本项目会把**边界**和**依据**都写清楚。
 
-**不改包、不重签、不需要 LSPosed。** 原理是直接调用系统自带的主题商店服务，
-等价于在商店里点「应用」。
+| 平台 | 包格式 | 能做到 |
+|---|---|---|
+| **ColorOS**（OPPO / 一加 / realme） | `.theme` | **整包应用**、混搭、子集、备份恢复（真机验证） |
+| **MIUI / HyperOS**（小米 / Redmi / POCO） | `.mtz` | 平台探测 + 包体检 + 免 root 注入 Theme backup（**未真机验证**） |
+| **EMUI / HarmonyOS**（华为 / 荣耀） | `.hwt` | 平台探测 + 包体检 + 放 `Huawei/Themes` 交给商店导入 |
+| **OriginOS**（vivo / iQOO） | `.itz` | 平台探测 + 包体检 + 放 Download 交给 i主题 导入 |
 
-> 实测环境：一加 LE2123（ColorOS 16 / Android 16，`ro.oplus.theme.version=16000`）。
+**不改包、不重签、不需要 LSPosed。** ColorOS 这条路是直接调用系统自带的主题商店服务，
+等价于在商店里点「应用」；其它平台则是"让商店自己完成"，权限始终留在商店手里。
+
+> ColorOS 实测环境：一加 LE2123（ColorOS 16 / Android 16，`ro.oplus.theme.version=16000`）。
 > 其它 ColorOS 12+ 机型原理相同，但未逐一验证。
 
 ---
