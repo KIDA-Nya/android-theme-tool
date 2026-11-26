@@ -174,6 +174,7 @@ theme
 | 锁屏壁纸 | `set_lock_wallpaper.ps1` | 提取主题内的 keyguard 图单独设置 |
 | 包体检 | `check_package.ps1` | `.theme` / `.mtz` / `.hwt` 通吃 |
 | 交给商店导入 | `route_to_store.ps1` | MIUI / 华为：放到商店能扫到的位置并拉起商店 |
+| MIUI 免 root 注入 | `miui_theme_backup.ps1` | 改商店自己信任的 Theme backup 组件（**未真机验证**） |
 
 ---
 
@@ -197,6 +198,7 @@ theme
 │  ├─ theme_mix.py         混搭拼包（多主题取模块合成一个包）
 │  ├─ extract_assets.py    从 .theme/.mtz/.hwt 里拆出壁纸/图标/字体/铃声
 │  ├─ route_to_store.ps1   把包交给主题商店自己导入（MIUI/华为 用）
+│  ├─ miui_theme_backup.ps1  MIUI/HyperOS 免 root 注入 Theme backup
 │  ├─ check_theme.py       应用前体检
 │  ├─ extract_keyguard.py  提取锁屏壁纸
 │  └─ newuuid.py           换 UUID（强制重应用）
@@ -337,6 +339,31 @@ ColorOS .theme → [wallpaper] 3 个 / [icons] 473 个 / [ui] 325 个
 
 - **MIUI**：受内容 DRM 限制，商店主题或他人分享的受保护主题，点了「应用」也会被拦
 - **鸿蒙 5 / 高版本 MagicOS**：`Huawei/Themes` 目录被收紧，可能扫不到（社区反馈）
+
+---
+
+## MIUI / HyperOS 的另一条路：改商店自己的 "Theme backup"
+
+刷机圈有个更聪明的思路，我把它实现了：**不新建主题，而是改商店自己造的那个 backup**。
+
+商店把主题库放在 `/sdcard/Android/data/com.android.thememanager/files/MIUI/theme/.data`——
+**这个目录 shell 可读写**，而 `/data/system/theme` 不行。其中：
+
+- `content/<code>/<id>.mrc` 是组件本体（zip）
+- `meta/<code>/<id>.mrm` 是元数据，`hash` 就是 `.mrc` 的 SHA-1，**没有签名**
+- "Theme backup" 是商店「定制主题」时生成的，**没有 rights 记录、应用时不问服务器**
+
+所以：把 backup 里某个组件的 `localId` 指向我们打包的文件，应用时由**商店自己**写进系统。
+
+```powershell
+.\tools\miui_theme_backup.ps1 -List                                    # 看有哪些 backup
+.\tools\miui_theme_backup.ps1 -Mtz x.mtz -Theme <id> -Component icons   # 注入
+```
+
+前提：手机上要先生成一个 Theme backup（主题应用 → 定制主题 → 改一项 → 应用）。
+
+代价与限制都写在 [docs/MIUI-THEME-BACKUP.md](docs/MIUI-THEME-BACKUP.md)：
+**有单元测试、没有真机验证**；还列了另外 4 条方案（V7 模块 / Xposed / ThemeStore / 降版本）的对照。
 
 ---
 

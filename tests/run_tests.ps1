@@ -171,6 +171,56 @@ if (Test-AssetExport (Join-Path $asFx 'nested.theme') 'ColorOS 内嵌 zip' @{
 if (Test-AssetExport (Join-Path $asFx 'flat.hwt') '华为平铺目录' @{
         wallpaper = 1; icons = 1; fonts = 1 }) { $pass++ } else { $fail++ }
 
+# ---------------- miui_backup_inject：Theme backup 注入 ----------------
+Write-Host ''
+Write-Host '=== miui Theme backup 注入测试 ===' -ForegroundColor Cyan
+
+$mbFx = Join-Path $env:TEMP 'themetool_miuidata'
+$mbTool = Join-Path $repoRoot 'tools\miui_backup_inject.py'
+$mbMk = Join-Path $PSScriptRoot 'mk_miui_data_fixture.py'
+$mbChk = Join-Path $PSScriptRoot 'check_miui_inject.py'
+if (Test-Path -LiteralPath $mbFx) { Remove-Item -LiteralPath $mbFx -Recurse -Force }
+& $py -X utf8 $mbMk $mbFx | ForEach-Object { Write-Host ('  ' + $_) -ForegroundColor Gray }
+
+$mbTheme = 'THEMEBACKUP0000000000000000000001'
+$mbReport = Join-Path $mbFx 'changed.json'
+$mbOut = (& $py -X utf8 $mbTool --data (Join-Path $mbFx '.data') --theme $mbTheme `
+        --mtz (Join-Path $mbFx 'sample.mtz') --component icons --report $mbReport *>&1) -join "`n"
+if ($LASTEXITCODE -eq 0) {
+    $chkOut = (& $py -X utf8 $mbChk $mbFx *>&1) -join "`n"
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host '  [PASS] 注入后 hash/size/localId 与内容都正确' -ForegroundColor Green
+        $pass++
+    }
+    else {
+        Write-Host '  [FAIL] 注入结果校验不符' -ForegroundColor Red
+        Write-Host $chkOut -ForegroundColor DarkGray
+        $fail++
+    }
+}
+else {
+    Write-Host "  [FAIL] 注入执行失败（exit=$LASTEXITCODE）" -ForegroundColor Red
+    Write-Host $mbOut -ForegroundColor DarkGray
+    $fail++
+}
+
+# 变更清单应恰好包含 3 个文件
+if (Test-Path -LiteralPath $mbReport) {
+    $changed = (Get-Content -LiteralPath $mbReport -Raw | ConvertFrom-Json).changed
+    if ($changed.Count -eq 3) {
+        Write-Host '  [PASS] 变更清单只列出改动的 3 个文件' -ForegroundColor Green
+        $pass++
+    }
+    else {
+        Write-Host ("  [FAIL] 变更清单条目数不对：{0}" -f $changed.Count) -ForegroundColor Red
+        $fail++
+    }
+}
+else {
+    Write-Host '  [FAIL] 没有生成变更清单' -ForegroundColor Red
+    $fail++
+}
+
 # ---------------- 可选：真实 .theme ----------------
 $sample = $env:THEME_SAMPLE
 if (-not $sample) {

@@ -291,6 +291,24 @@ intent（`action.SEND`、`category.OPENABLE`、`scheme=file` 命中数都是 0�
 
 ---
 
+## 7.10 MIUI / HyperOS：改商店自己的 Theme backup（免 root）
+
+```powershell
+.\tools\miui_theme_backup.ps1 -List
+.\tools\miui_theme_backup.ps1 -Mtz '某主题.mtz' -Theme <localId> -Component icons
+```
+
+前提：手机上先生成一个 Theme backup（主题应用 → 定制主题 → 改任意一项 → 应用）。
+
+它做的是：拉取商店库 → 在本地把 `.mtz` 的某模块打包成新的 `.mrc`、同步 `hash/size`、
+把主题元数据里的 `localId` 指过去 → 只回推 3 个改动文件 → 停掉商店。
+之后你在主题应用里应用那个 "Theme backup"，由商店自己写进 `/data/system/theme`。
+
+**没有真机验证**，逻辑有单元测试兜底；失败可按 [MIUI-THEME-BACKUP.md](MIUI-THEME-BACKUP.md)
+第五节换其它方案（降版本 / ThemeStore / V7 模块 / Xposed）。
+
+---
+
 ## 8. 出问题怎么查
 
 **先跑体检**（菜单 `[1]` 或 `python tools/check_theme.py 主题.theme --device-version <版本号>`），
