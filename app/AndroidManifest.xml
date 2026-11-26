@@ -2,6 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.keke.themetool">
 
+    <!-- 需要读取 /sdcard 下的主题包 -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+
     <application
         android:label="主题工具"
         android:allowBackup="false">
@@ -21,15 +25,5 @@
             android:name=".ThemeRunnerService"
             android:exported="false"
             android:process=":runner" />
-
-        <!-- Shizuku 必需 -->
-        <provider
-            android:name="rikka.shizuku.ShizukuProvider"
-            android:authorities="com.keke.themetool.shizuku"
-            android:multiprocess="false"
-            android:enabled="true"
-            android:exported="true"
-            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
-
-    </application>
+</application>
 </manifest>

@@ -25,6 +25,7 @@ $manifest = Join-Path $appDir 'AndroidManifest.xml'
 $distDir = Join-Path $repoRoot 'dist'
 $buildDir = Join-Path $repoRoot 'build\themetool'
 $shizukuAar = Join-Path $repoRoot 'shizuku-lib\api.aar'
+$shizukuProviderAar = Join-Path $repoRoot 'shizuku-lib\provider.aar'
 
 foreach ($p in @($srcDir, $manifest)) {
     if (-not (Test-Path -LiteralPath $p)) { throw "缺少：$p" }
@@ -63,15 +64,25 @@ Write-Info "  javac       : $jdkBin"
 # ---------------------------------------------------------------- 1) Shizuku classes.jar
 Write-Step '解出 Shizuku api'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-$shizukuJar = Join-Path $buildDir 'shizuku-api.jar'
-$aar = [System.IO.Compression.ZipFile]::OpenRead($shizukuAar)
-try {
-    $entry = $aar.Entries | Where-Object { $_.FullName -eq 'classes.jar' } | Select-Object -First 1
-    if (-not $entry) { throw 'api.aar 里没有 classes.jar' }
-    [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $shizukuJar, $true)
+function Expand-Aar {
+    param([string]$Aar, [string]$OutJar)
+    if (-not (Test-Path -LiteralPath $Aar)) { throw "缺少 $Aar" }
+    $a = [System.IO.Compression.ZipFile]::OpenRead($Aar)
+    try {
+        $e = $a.Entries | Where-Object { $_.FullName -eq 'classes.jar' } | Select-Object -First 1
+        if (-not $e) { throw "$Aar 里没有 classes.jar" }
+        [System.IO.Compression.ZipFileExtensions]::ExtractToFile($e, $OutJar, $true)
+    }
+    finally { $a.Dispose() }
 }
-finally { $aar.Dispose() }
+
+$shizukuJar = Join-Path $buildDir 'shizuku-api.jar'
+$providerJar = Join-Path $buildDir 'shizuku-provider.jar'
+Expand-Aar -Aar $shizukuAar -OutJar $shizukuJar
+Expand-Aar -Aar $shizukuProviderAar -OutJar $providerJar
+$shizukuCp = "$shizukuJar;$providerJar"
 Write-Ok "  $shizukuJar"
+Write-Ok "  $providerJar"
 
 # ---------------------------------------------------------------- 2) aidl
 Write-Step '生成 AIDL'
@@ -96,7 +107,7 @@ $srcList = Join-Path $buildDir 'sources.txt'
 [System.IO.File]::WriteAllLines($srcList, $allSrc, (New-Object System.Text.UTF8Encoding($false)))
 
 & (Join-Path $jdkBin 'javac.exe') -encoding UTF-8 -source 11 -target 11 `
-    -classpath "$androidJarPath;$shizukuJar" -d $classesDir "@$srcList" 2>&1 |
+    -classpath "$androidJarPath;$shizukuCp" -d $classesDir "@$srcList" 2>&1 |
     Where-Object { $_ -notmatch 'warning|警告|bootstrap class path|source value 11|target value 11' } |
     ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
 if ($LASTEXITCODE -ne 0) { throw 'javac 失败' }
@@ -111,7 +122,7 @@ if ($LASTEXITCODE -ne 0) { throw 'jar 失败' }
 $dexDir = Join-Path $buildDir 'dex'
 New-Item -ItemType Directory -Path $dexDir -Force | Out-Null
 & (Join-Path $btPath 'd8.bat') --min-api 30 --output $dexDir --lib $androidJarPath `
-    --classpath $shizukuJar $classesJar 2>&1 | Where-Object { $_ -match 'Error|error|错误' } | ForEach-Object { Write-Host "  $_" }
+    --classpath $shizukuCp $classesJar 2>&1 | Where-Object { $_ -match 'Error|error|错误' } | ForEach-Object { Write-Host "  $_" }
 if (-not (Test-Path (Join-Path $dexDir 'classes.dex'))) { throw 'd8 没有产出 classes.dex' }
 Write-Ok '  d8 完成'
 

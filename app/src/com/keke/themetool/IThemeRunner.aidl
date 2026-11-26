@@ -6,7 +6,7 @@ package com.keke.themetool;
  */
 interface IThemeRunner {
     /** 执行脚本，返回 stdout+stderr。 */
-    String run(String script) throws android.os.RemoteException;
+    String run(String script);
     /** 当前身份，形如 uid=2000(shell)。 */
-    String whoami() throws android.os.RemoteException;
+    String whoami();
 }

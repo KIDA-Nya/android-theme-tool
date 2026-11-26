@@ -18,12 +18,12 @@ public class ThemeRunnerService extends Service {
 
     private final IThemeRunner.Stub binder = new IThemeRunner.Stub() {
         @Override
-        public String run(String script) throws RemoteException {
+        public String run(String script) {
             return exec(script);
         }
 
         @Override
-        public String whoami() throws RemoteException {
+        public String whoami() {
             return exec("id");
         }
     };
