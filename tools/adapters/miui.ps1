@@ -13,7 +13,7 @@ function Get-MiuiAdapter {
         Descriptor    = 'description.xml'
         # 实测（docs/VENDOR-FINDINGS.md）：ThemeService 实现 miui.content.res.IThemeService，
         # 只有 4 个方法，全部是「按路径设置单项资源」，没有「应用整个 .mtz」的方法。
-        Note          = '只读：探测 + .mtz 体检。免 root 只能设壁纸/图标，整包应用不可行'
+        Note          = '只读：探测 + .mtz 体检。免 root 无法整包应用（签名权限 shell 不持有）'
 
         TestPlatform = {
             $evidence = New-Object System.Collections.ArrayList
@@ -40,6 +40,7 @@ function Get-MiuiAdapter {
                     [void]$evidence.Add('权限要求: miui.permission.USE_INTERNAL_GENERAL_API')
                 }
                 [void]$evidence.Add('服务能力: 仅 saveWallpaper/saveLockWallpaper/saveIcon（无整包方法）')
+                [void]$evidence.Add('权限: shell 不持有 USE_INTERNAL_GENERAL_API（真机实测 SecurityException）')
             }
 
             $props = @{}
@@ -142,10 +143,11 @@ function Get-MiuiAdapter {
         Apply = {
             param($Path)
             $why = @(
-                'MIUI 的 ThemeService 只有 saveWallpaper / saveLockWallpaper / saveIcon / saveCustomizedIcon 四个方法，'
-                '没有「应用整个 .mtz」的接口，整包写入做不到。'
-                '免 root 的可行范围只有壁纸与图标（partial apply），本项目尚未实现。'
-                '证据见 docs/VENDOR-FINDINGS.md。'
+                'MIUI 没有等价通道，两条原因都有实测支撑：'
+                '1) ThemeService 只有 saveWallpaper / saveLockWallpaper / saveIcon / saveCustomizedIcon 四个方法，没有接受主题包的方法；'
+                '2) 该服务与 content provider 都要求 miui.permission.USE_INTERNAL_GENERAL_API，而 shell(uid 2000) 并不持有（真机 SecurityException）。'
+                '免 root 唯一可行的是「MIUI 备份 App 代为恢复 + deep link + 用户点应用」，但最终应用受 MIUI 内容 DRM 限制，'
+                '受保护的第三方主题无法应用。证据见 docs/VENDOR-FINDINGS.md 第六、八节。'
             ) -join [Environment]::NewLine
             throw $why
         }

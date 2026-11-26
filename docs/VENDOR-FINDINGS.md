@@ -273,3 +273,88 @@ aapt2 dump badging  <apk>
 aapt2 dump xmltree --file AndroidManifest.xml <apk>
 dexdump -d <dex>            # 大 dex 输出可达 190MB，用脚本按需检索
 ```
+## 八、如果接受 Shizuku 授权，小米能换主题吗？
+
+**结论：Shizuku（ADB 模式）在小米这边几乎帮不上忙。** 这是真机测试出来的，不是推断。
+
+测试机：2201116PG (veux)，Android 16 / HyperOS OS3.0.301.0，Themes 3.4.8.36-global，
+无 su、无 root、无 Xposed、SELinux Enforcing。Shizuku/Shevery 跑在 **ADB 模式（uid 2000）**。
+
+### 四条低层路线，全部对 uid 2000 关闭
+
+| # | 路线 | 结果 |
+|---|---|---|
+| 1 | 用 MTZ Studio 自己的 BAK binder 恢复 | 代码里显式 gate：`SheveryBackupRestorer` 在 `Shizuku.getUid() != 0` 时返回 `ADB_ONLY` |
+| 2 | 把 `.mtz` 直接丢进 Themes 的 `files/MIUI/theme/` | 无效——shell 确实在 `ext_data_rw` 组里能写进去，但商店本地列表不变 |
+| 3 | 手写商店目录记录 `.data/meta/theme/<id>.mrm` | 无效——**目录在 App 私有数据库里**，`Android/data` 下那些文件只是备份镜像，不是真相源 |
+| 4 | `content://` provider 查询 | **`SecurityException: requires miui.permission.USE_INTERNAL_GENERAL_API`** |
+
+第 4 条特别重要：
+
+```
+content query --uri content://com.android.thememanager.theme_provider/theme
+→ SecurityException: ... requires miui.permission.USE_INTERNAL_GENERAL_API
+content query --uri content://com.android.thememanager.provider
+→ SecurityException: ... (ThemeRuntimeDataProvider) same permission
+```
+
+也就是说：**`com.android.shell` 并不持有 `miui.permission.USE_INTERNAL_GENERAL_API`**（`signature|privileged`）。
+这回答了上一版留下的疑问——那个 exported `ThemeService` 从 shell 侧调不动。
+
+### 唯一免 root 可行的路：让系统 App 代劳
+
+报告 §11 的突破不是"提权"，而是**找已在特权位置的系统应用**：
+
+```
+MTZ → 转成 MIUI 备份格式
+    → 写 /sdcard/MIUI/backup/AllBackup/<ts>/
+        Themes(com.android.thememanager).bak  +  descript.xml
+      （需要 MANAGE_EXTERNAL_STORAGE，普通 App 就能申请）
+    → 拉起 miui.intent.backup.LOCAL_HOME_ACTIVITY（exported，无权限）
+    → 用户在 MIUI 备份里点「恢复」   ← 这一下由系统 App 用自己的权限完成
+    → 商店目录出现记录 .data/meta/theme/<uuid>.mrm
+    → deep link  ViewLocalResource://view.local.resource#<localId>
+    → 用户在主题页点「应用」
+```
+
+2026-11-23 在无 root 真机上跑到 100% 完成，第三方主题成功进入目录并打开了自己的详情页。
+
+### 但最后一关是内容 DRM
+
+`miui.drm.DrmManager.isLegal(context, contentFile, rightsFile)` 按**主题内容**（不是 onlineId 字段）
+算出一个 `<hash>.mra` 权利文件名，去 `.data/rights/theme/` 找，找不到就向小米下载（无权利时 413 失败），
+应用被拦：
+
+```
+DrmService: check rights file: c010f94e...mra, exists: false
+ThemeDebug:  CheckRightsTask return: DRM_ERROR_RIGHT_FILE_NOT_EXISTS
+DrmService: downloadRights, resultCode=413
+```
+
+实验证明它是**按内容**判定的：
+- 商店主题（Tokio，带真实 `.mra`）→ 点应用无效果，`isLegal` 失败
+- 把记录的 `onlineId` / `productId` 改成 `null` → 恢复直接不产生记录（`DRM_ERROR_ASSET_NOT_MATCH`）
+- 换成无权利文件、`onlineId:null` 的分享主题（Circle UI）→ 能进目录，但应用时**仍然**跑上面的 DRM 检查并被拦
+
+所以：
+
+| 主题类型 | 免 root 能否应用 |
+|---|---|
+| 真正原创、无 DRM 资产的组合 | **可以**（报告说这条与 DRM 按内容判定一致，但未端到端证明） |
+| 商店主题 / 他人分享的受保护主题 | **不可以**，无免 root 绕过手段 |
+
+### 那台"root 就能用"的机器是怎么回事
+
+报告明确纠正了一个常见误解：能应用的那台 **klee** 装有 **LSPosed CorePatch**
+（专门绕过 MIUI 签名/权利校验）。应用后 `/data/system/theme/rights` 是空的，
+说明正是 CorePatch 中和了 `DrmService` 检查。**那不是"root 的功劳"，是 Xposed 模块的功劳。**
+
+### 给你的项目的结论
+
+1. **Shizuku ADB 模式对小米主题路径无增益**——四条低层路全关，签名权限 shell 拿不到。
+2. **能落地的免 root 流程**是"备份 App 恢复 + deep link + 用户点两下"，且只对无 DRM 的主题有效。
+3. **要稳定换任意第三方主题**，现实路径仍是 root + CorePatch 这类校验绕过；
+   这与 ColorOS 不同——ColorOS 有合法的 exported 服务可调，小米没有。
+
+---
+
