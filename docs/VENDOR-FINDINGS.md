@@ -64,8 +64,8 @@ provides-component 'wallpaper'
 ```
 
 - `ThemeService` 继承 `miui.content.res.IThemeService$Stub`（**框架级 AIDL**）
-- 该 build 里实现方法被混淆成短名（`n/p/s`(String)、`y`(String,Bitmap)、`onBind`…），
-  说明接口方法名以 framework 里的 AIDL 为准，需 framework.jar 才能对齐
+- 该 build 里实现方法被混淆成短名（`n/p/s`(String)、`y`(String,Bitmap)），
+  但 **framework 的 AIDL 定义是公开的**，见下节
 - `ThemePCService` 是**电脑端工具**用的接口（`IThemePCService`）
 
 > 这与 ColorOS 的结构**同构**：都是「exported 服务 + 签名级权限 + 系统执行者」。
@@ -166,35 +166,110 @@ dev.glorioustr.mtzstudio.action.IMPORT_MODERN_THEME
 
 ---
 
-## 五、仍然没验证的部分
+## 五、哪些已经查清、哪些还没
 
-1. **MIUI 的 AIDL 方法名与参数** —— 需要 MIUI 的 `framework.jar`（`miui.content.res.IThemeService`）
-   才能拿到真实签名；当前 build 里实现方法被混淆成 `n/p/s/y`。
-2. **`miui.permission.USE_INTERNAL_GENERAL_API` 是否授予 shell(uid 2000)** ——
-   ColorOS 的对应权限 shell 是有的（所以本项目能跑），MIUI 未知。
-3. **真实 `.mtz` 的顶层目录清单** —— 手头没有真实 mtz 样本，模块名来自 dex 常量与公开资料。
-4. **EMUI 的写入路径** —— `/data/themes/<id>/` 是公开资料说法，未在真机验证。
+### 已经查清（有实证）
 
-### 有真机后的验证顺序
+| 问题 | 结论 | 证据 |
+|---|---|---|
+| MIUI 的 AIDL 方法签名 | `saveWallpaper/saveLockWallpaper/saveIcon(String)`、`saveCustomizedIcon(String,Bitmap)` 共 4 个，无整包方法 | MIUI framework 反编译源码 + APK 里 4 个混淆方法一一对应 |
+| 调用是否需要特权 | 社区实测：普通 App 直接 bind `ThemeService` 即可（通道 A），无需 root/Shizuku | HyperOS-MTZ-Studio 的分析与真机报告 |
+| MIUI 免 root 能做什么 | 壁纸、锁屏壁纸、图标；**整包主题不行** | 同上，及其真机测试报告原话 |
+| MIUI 资源路径 | `/data/system/theme/…`、`/data/system/theme_magic/…` | APK dex 字符串常量 |
+| `.mtz` 是否有 description.xml | 有 | APK dex 中出现该常量 |
+| 注入路线是否算免 root | **不算**——测试机已 root，且 `/data/adb`、`/proc/<pid>/maps` 对 shell 不可读 | 其真机报告明确声明 |
+| EMUI 真实 hwt 结构 | 顶层 `description.xml/preview/wallpaper/unlock/icons/com.android.systemui/com.huawei.android.launcher` | 真实 `theme.hwt` 样本 |
+| EMUI 锁屏文件 | `unlock/theme.xml`（MAML） | 同上 |
+
+### 还没查清（需要设备或样本）
+
+1. **真实 `.mtz` 的顶层目录清单** —— 手头没有 mtz 样本，当前模块名来自 dex 常量与公开资料。
+2. **EMUI 的写入路径** —— `/data/themes/<id>/` 是公开资料说法，未在真机验证；
+   也没找到 `com.huawei.android.thememanager` 的 APK 来做组件分析。
+3. **EMUI 是否有等价的 exported 服务** —— 未取得 APK，未知。
+4. **MIUI 通道 B 的细节** —— 写 `Android/data/com.android.thememanager` 后如何触发商店扫描，
+   社区做法是「转成商店备份文件再恢复」，未在真机复现。
+
+### 有真机/样本后怎么推进
 
 ```bash
-# MIUI
-adb shell pm list packages com.android.thememanager
-adb shell dumpsys package com.android.thememanager | grep -A3 ThemeService
-adb shell dumpsys package com.android.thememanager | grep USE_INTERNAL_GENERAL_API
-adb shell ls -l /data/system/theme            # 需要 root
-# 若权限给 shell：尝试投递
-adb shell am startservice -n com.android.thememanager/com.android.thememanager.service.ThemeService \
-  -a com.miui.service.THEMESERVICE
+# MIUI：确认通道 A 是否真的无需权限
+adb shell dumpsys package com.android.thememanager | grep -A2 ThemeService
+adb shell ls -ld /data/data/com.android.thememanager   # 需要 root
+# 通道 B：看商店目录属组是否 ext_data_rw(1078)
+adb shell ls -ld /sdcard/Android/data/com.android.thememanager
 
-# EMUI
-adb shell pm list packages | grep thememanager
-adb shell ls -l /data/themes                  # 需要 root
+# EMUI：拿到 thememanager APK 后
+aapt2 dump xmltree --file AndroidManifest.xml com.huawei.android.thememanager.apk | grep -i -B2 -A6 service
 ```
 
-拿到 `framework.jar` 后可以直接：
+## 六、MIUI 到底能不能免 root 应用主题（已查到接口定义）
+
+### 接口只有 4 个方法
+
+来自 MIUI framework 的反编译源码
+（[Fklearn/XiaomiFramework · IThemeService.java](https://github.com/Fklearn/XiaomiFramework/blob/master/mi2s_10_miui12/src/main/java/miui/content/res/IThemeService.java)）：
+
+```java
+public interface IThemeService extends IInterface {
+    boolean saveLockWallpaper(String srcImagePath)  throws RemoteException;
+    boolean saveIcon(String srcImagePath)           throws RemoteException;
+    boolean saveWallpaper(String srcImagePath)      throws RemoteException;
+    boolean saveCustomizedIcon(String fileName, Bitmap icon) throws RemoteException;
+    // DESCRIPTOR = "miui.content.res.IThemeService"
+}
+```
+
+这就解释了 APK 里看到的 `n/p/s(String)Z` + `y(String,Bitmap)Z` —— **正好 4 个**，
+与上面的 `saveLockWallpaper / saveIcon / saveWallpaper / saveCustomizedIcon` 一一对应。
+
+> **没有任何接受「主题包路径」的方法。** `ThemeService` 只能按路径设置**单项资源**
+> （壁纸、锁屏壁纸、图标），不能应用整个 `.mtz`。
+
+### 三条通道的实测结论
+
+社区项目 [HyperOS-MTZ-Studio](https://github.com/GloriousApps/HyperOS-MTZ-Studio) 做过完整分析
+（`docs/themes-3.4.8.36-rootless-analysis.md` 与 `docs/rootless-capability-device-test.md`），结论：
+
+| 通道 | 做法 | 免 root 可行性 |
+|---|---|---|
+| **A** | 直接 bind `ThemeService`，调 `saveWallpaper/saveIcon` | ✅ 可行（无需任何特权），但**只能换壁纸和图标** |
+| **B** | 把 `.mtz` 注册成商店的本地资源，用户手点「应用」 | ❌ 需要写 `Android/data/com.android.thememanager`，属组 `ext_data_rw`(gid 1078)，只有 **shell/Shizuku** 在组内，第三方 App 不在 |
+| **C** | deep-link 把用户送到「应用」按钮（URI **fragment** 承载参数） | ✅ 可行，但最后一下仍要用户点 |
+
+该报告的原话（针对无 root 设备）：
+
+> "wallpapers and icons yes, a whole theme no"
+
+并且明确指出：注入式方案（Zygisk）的测试机是**已 root** 的，
+`/data/adb` 与 `/proc/<pid>/maps` 对 shell 都不可读，所以**注入路线不能算免 root 方案**。
+
+### 与 ColorOS 的关键差异
+
+| | ColorOS | MIUI |
+|---|---|---|
+| 整包应用接口 | ✅ `ThemeApplyService.apply(uri)` 接受主题路径 | ❌ 无 |
+| shell 能否直接投递 | ✅ 能（本项目已实现） | ❌ 不能 |
+| 免 root 能做多少 | 整包 | 壁纸 + 图标 |
+| 整包要什么 | 无（shell 即可） | Shizuku 注册 + 用户手点，或 root/注入 |
+
+**所以 MIUI 适配器不做写入是对的**——不是"没来得及实现"，而是接口层就不存在等价能力。
+
+---
+
+## 七、这次查证用到的检索方式（可复用）
 
 ```powershell
-aapt2 dump xmltree --file AndroidManifest.xml framework.jar
-dexdump -d classes.dex | grep -A2 IThemeService
+# 1) GitHub 代码搜索找接口定义
+#    q=IThemeService filename:IThemeService.aidl
+#    q=miui.content.res.IThemeService
+#    命中：Fklearn/XiaomiFramework、XEonAX/ANXMiuiApps、munjeni/miui_v5_lotus
+
+# 2) 取原始文件
+#    https://raw.githubusercontent.com/<repo>/<branch>/<path>
+
+# 3) 真实包结构
+aapt2 dump badging  <apk>
+aapt2 dump xmltree --file AndroidManifest.xml <apk>
+dexdump -d <dex>            # 大 dex 输出可达 190MB，用脚本按需检索
 ```

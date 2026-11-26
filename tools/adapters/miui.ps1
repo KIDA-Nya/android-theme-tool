@@ -1,4 +1,4 @@
-﻿# MIUI / HyperOS 适配器（小米 / Redmi）
+﻿﻿# MIUI / HyperOS 适配器（小米 / Redmi）
 #
 # 能力：探测 + 包体检（**.mtz 只读**）
 # 写入未实现：需要写 /data/system/theme 或调用 com.android.thememanager 的受保护入口，
@@ -11,7 +11,9 @@ function Get-MiuiAdapter {
         SupportsApply = $false
         ThemeDir      = '/data/system/theme'   # 实测：config.config 与 fonts/lockscreen 等子目录都在此
         Descriptor    = 'description.xml'
-        Note          = '只读：平台探测与 .mtz 包体检；写入未实现'
+        # 实测（docs/VENDOR-FINDINGS.md）：ThemeService 实现 miui.content.res.IThemeService，
+        # 只有 4 个方法，全部是「按路径设置单项资源」，没有「应用整个 .mtz」的方法。
+        Note          = '只读：探测 + .mtz 体检。免 root 只能设壁纸/图标，整包应用不可行'
 
         TestPlatform = {
             $evidence = New-Object System.Collections.ArrayList
@@ -37,6 +39,7 @@ function Get-MiuiAdapter {
                 if ($dump -match 'USE_INTERNAL_GENERAL_API') {
                     [void]$evidence.Add('权限要求: miui.permission.USE_INTERNAL_GENERAL_API')
                 }
+                [void]$evidence.Add('服务能力: 仅 saveWallpaper/saveLockWallpaper/saveIcon（无整包方法）')
             }
 
             $props = @{}
@@ -138,7 +141,13 @@ function Get-MiuiAdapter {
 
         Apply = {
             param($Path)
-            throw 'MIUI 适配器只实现了只读能力（探测 + 包体检），写入尚未实现。'
+            $why = @(
+                'MIUI 的 ThemeService 只有 saveWallpaper / saveLockWallpaper / saveIcon / saveCustomizedIcon 四个方法，'
+                '没有「应用整个 .mtz」的接口，整包写入做不到。'
+                '免 root 的可行范围只有壁纸与图标（partial apply），本项目尚未实现。'
+                '证据见 docs/VENDOR-FINDINGS.md。'
+            ) -join [Environment]::NewLine
+            throw $why
         }
     }
 }

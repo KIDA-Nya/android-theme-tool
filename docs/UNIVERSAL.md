@@ -98,9 +98,20 @@ verify(expectedId) -> { ok, evidence{} }
   没有公开的「按路径应用」API
 - 社区做法是 **Zygisk hook**（在主题管理器进程内注入桥接），不是调服务
 
-**结论**：结构与 ColorOS 同构，但「shell 一条命令投递」的等价物尚不存在。
-要落地写入，缺的是 ① `framework.jar` 里 `IThemeService` 的方法签名 ②
-shell 是否被授予 `miui.permission.USE_INTERNAL_GENERAL_API` 的真机验证。
+**结论（已查到接口定义）**：`miui.content.res.IThemeService` 只有 4 个方法，
+全部是「按路径设置单项资源」——
+
+```java
+boolean saveWallpaper(String path)
+boolean saveLockWallpaper(String path)
+boolean saveIcon(String path)
+boolean saveCustomizedIcon(String name, Bitmap icon)
+```
+
+**没有任何接受主题包的方法。** 所以 MIUI 上「免 root 应用整包主题」在接口层就不存在，
+不是没实现，是没接口。免 root 能做到的是壁纸 + 图标（partial apply）。
+
+社区真机报告的原话：无 root 设备上 "wallpapers and icons yes, a whole theme no"。
 
 ### EMUI / HarmonyOS — 未实现，部分机型甚至无需特权
 
