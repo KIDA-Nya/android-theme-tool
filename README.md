@@ -196,6 +196,7 @@ theme
    ├─ USAGE.md             使用手册（四种一键方式 + 场景 + 排错）
    ├─ PORTABILITY.md       可移植性与健壮性（换机型看这个）
    ├─ UNIVERSAL.md         跨品牌通用策略调研与适配器架构
+   ├─ VENDOR-FINDINGS.md   MIUI / EMUI 的真实包实测记录
    └─ PHONE.md             手机端说明
 ```
 

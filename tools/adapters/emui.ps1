@@ -99,13 +99,21 @@ function Get-EmuiAdapter {
                 $tops = @($tops | Select-Object -Unique)
                 $info['TopLevel'] = $tops
 
-                $known = @('wallpaper', 'icons', 'lockscreen', 'fonts', 'com.android.systemui',
-                    'framework-res', 'com.android.settings', 'contacts', 'mms')
+                # 真实样本实测顶层：description.xml / preview / wallpaper / unlock /
+                #   icons / com.android.systemui / com.huawei.android.launcher
+                $known = @('wallpaper', 'icons', 'lockscreen', 'unlock', 'fonts',
+                    'com.android.systemui', 'framework-res', 'com.android.settings',
+                    'com.huawei.android.launcher', 'com.huawei.android.mms',
+                    'contacts', 'mms')
                 $found = @($tops | Where-Object { $known -contains $_ })
                 $info['KnownModules'] = $found
                 if ($found.Count -eq 0) {
                     [void]$problems.Add('没识别出任何已知模块目录（wallpaper / icons / lockscreen / fonts …）')
                 }
+
+                # 锁屏是一套 MAML 表达式，真实样本为 unlock/lockscreen/manifest.xml
+                $locks = @($names | Where-Object { $_ -match '^unlock/.+\.xml$' })
+                if ($locks.Count -gt 0) { $info['LockscreenXml'] = @($locks | Select-Object -First 3) }
 
                 return @{
                     Ok       = ($problems.Count -eq 0)

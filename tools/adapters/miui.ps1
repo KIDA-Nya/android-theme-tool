@@ -9,7 +9,7 @@ function Get-MiuiAdapter {
         Name          = 'miui'
         DisplayName   = 'MIUI / HyperOS（小米 / Redmi）'
         SupportsApply = $false
-        ThemeDir      = '/data/system/theme'
+        ThemeDir      = '/data/system/theme'   # 实测：config.config 与 fonts/lockscreen 等子目录都在此
         Descriptor    = 'description.xml'
         Note          = '只读：平台探测与 .mtz 包体检；写入未实现'
 
@@ -21,6 +21,22 @@ function Get-MiuiAdapter {
             $hit = @()
             foreach ($p in @('com.android.thememanager', 'com.miui.themestore', 'com.merak')) {
                 if ($pkgs -match ('package:' + [regex]::Escape($p) + '\s')) { $hit += $p }
+            }
+
+            # 实测（com.android.thememanager 11.5.3.1）：
+            #   exported service com.android.thememanager.service.ThemeService
+            #     action com.miui.service.THEMESERVICE
+            #     permission miui.permission.USE_INTERNAL_GENERAL_API
+            #   exported service com.android.thememanager.service.ThemePCService
+            #     action com.android.thememanager.service.IThemePCService
+            if ($hit -contains 'com.android.thememanager') {
+                $dump = ((Invoke-Adb @('shell', 'dumpsys package com.android.thememanager')) | Out-String)
+                if ($dump -match 'ThemeService') {
+                    [void]$evidence.Add('ThemeService: 存在（action com.miui.service.THEMESERVICE）')
+                }
+                if ($dump -match 'USE_INTERNAL_GENERAL_API') {
+                    [void]$evidence.Add('权限要求: miui.permission.USE_INTERNAL_GENERAL_API')
+                }
             }
 
             $props = @{}
@@ -90,9 +106,12 @@ function Get-MiuiAdapter {
                 }
 
                 # 顶层模块目录
+                # 依据 com.android.thememanager 11.5.3.1 的 dex 常量：
+                #   /data/system/theme/{fonts,lockscreen,ai_icon,aod,large_icons,rights,rearScreen,player_exo}
                 $known = @('com.android.systemui', 'com.android.settings', 'com.android.contacts',
                     'com.android.mms', 'com.android.launcher', 'framework-res', 'icons',
-                    'lockscreen', 'wallpaper', 'statusbar', 'boots', 'fonts', 'ringtones')
+                    'lockscreen', 'wallpaper', 'statusbar', 'boots', 'fonts', 'ringtones',
+                    'aod', 'ai_icon', 'large_icons', 'rearScreen', 'player_exo', 'rights')
                 $tops = @()
                 foreach ($n in $names) {
                     if ($n -eq 'description.xml' -or $n -eq 'preview' -or $n.StartsWith('preview/')) { continue }

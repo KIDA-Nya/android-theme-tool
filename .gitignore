@@ -55,6 +55,9 @@ scratch_*.txt
 ida_*.json
 ida_*_pseudo.c
 
+# 逆向分析样本（主题商店 APK / 主题样本 / dexdump 输出）
+/_samples/
+
 # 一次性分析脚本（不进仓库）
 /dex_strings.py
 /dump_*.py

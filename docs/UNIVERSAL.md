@@ -83,26 +83,42 @@ verify(expectedId) -> { ok, evidence{} }
 见 [PORTABILITY.md](PORTABILITY.md)。要点：签名级权限只能靠 shell/root；
 进程会被冻结；成功判据是 UUID 切换。
 
-### MIUI / HyperOS — 未实现，但路径清晰
+### MIUI / HyperOS — 未实现写入，但已拿到真实 APK 的证据
 
-- 包：`.mtz`（zip）。`description.xml` 描述，模块是包内目录
-- 执行者：`com.android.thememanager`；历史上资源落 `/data/system/theme`
-- 无 root 路线：社区已有用 **Shizuku** 写入的实现（第三方工具 `com.merak` 明确要求 Shizuku 或 root 写入）
-- 移植工作：写 `detect()`（认 thememanager）、`validate()`（认 mtz 结构）、
-  `apply()`（Shizuku 身份写资源目录），`verify()`（看当前主题 id）
-- 参考实现：[CrossPro / Mtzeditor（开源 MTZ 编辑器）](https://github.com/Alisuuu/Mtzeditor)
+实测 `com.android.thememanager` 11.5.3.1（详见 [VENDOR-FINDINGS.md](VENDOR-FINDINGS.md)）：
+
+- 包：`.mtz`（zip），**dex 中确有 `description.xml`**，校验器的假设成立
+- 资源落点：`/data/system/theme/`，配置 `/data/system/theme/config.config`，
+  子目录 `fonts/ lockscreen/ ai_icon/ aod/ large_icons/ rights/ rearScreen/ player_exo/`
+- **有一个 exported 服务**：`com.android.thememanager.service.ThemeService`
+  （action `com.miui.service.THEMESERVICE`，权限 `miui.permission.USE_INTERNAL_GENERAL_API`），
+  实现框架 AIDL `miui.content.res.IThemeService`
+- 另有 `ThemePCService`（`IThemePCService`），是电脑端工具接口
+- 应用流程是 **应用内** 的（`ApplyThemeTask` / `ProvisionApplyTheme`），
+  没有公开的「按路径应用」API
+- 社区做法是 **Zygisk hook**（在主题管理器进程内注入桥接），不是调服务
+
+**结论**：结构与 ColorOS 同构，但「shell 一条命令投递」的等价物尚不存在。
+要落地写入，缺的是 ① `framework.jar` 里 `IThemeService` 的方法签名 ②
+shell 是否被授予 `miui.permission.USE_INTERNAL_GENERAL_API` 的真机验证。
 
 ### EMUI / HarmonyOS — 未实现，部分机型甚至无需特权
 
-- 包：`.hwt`（zip），`description.xml` + 目录结构
-- 资源落点：`/data/themes/<id>/`
-- 社区做法：直接在文件管理器里访问 `/data/themes/0/` 复制/放回即可（部分机型开放访问）
+- 包：`.hwt`（zip），`description.xml` 根节点 `HwTheme`
+- **真实样本实测**顶层：`description.xml` / `preview/` / `wallpaper/` / `unlock/` /
+  `icons/` / `com.android.systemui/` / `com.huawei.android.launcher/`
+- 锁屏是 MAML 脚本，实测文件名 `unlock/theme.xml`
+- 资源落点：`/data/themes/<id>/`（公开资料，未真机验证）
+- 社区做法：直接在文件管理器里访问 `/data/themes/0/` 复制/放回（部分机型开放访问）
 - 移植工作：`detect()`（认 thememanager）、`apply()`（放目录 + 触发商店刷新）
 - 注意：HarmonyOS NEXT 起不再兼容 Android 应用，方案需重做
 
 ---
 
-## 五、实现进度（v2.0.0）
+## 五、实现进度（v2.1.0）
+
+> 厂商实测记录（含 APK 获取途径、组件、路径、仍然未知的部分）见
+> [VENDOR-FINDINGS.md](VENDOR-FINDINGS.md)。
 
 适配器契约已落到代码，不再只是设想：
 

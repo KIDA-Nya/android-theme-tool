@@ -69,7 +69,7 @@ if ($r.Info -and $r.Info.Count -gt 0) {
     foreach ($k in @('Root', 'Summary', 'Uuid', 'EditorVersion', 'title', 'title-cn', 'author', 'version', 'screen', 'RootNote')) {
         if ($r.Info.ContainsKey($k) -and $r.Info[$k]) { Write-Host ("    {0,-14} {1}" -f $k, $r.Info[$k]) -ForegroundColor Gray }
     }
-    foreach ($k in @('Modules', 'KnownModules', 'TopLevel', 'Declared')) {
+    foreach ($k in @('Modules', 'KnownModules', 'TopLevel', 'Declared', 'LockscreenXml')) {
         if ($r.Info.ContainsKey($k)) {
             $v = @($r.Info[$k])
             if ($v.Count -gt 0) { Write-Host ("    {0,-14} {1}" -f $k, ($v -join ', ')) -ForegroundColor Gray }
