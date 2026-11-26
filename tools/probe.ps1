@@ -125,6 +125,24 @@ if (-not $hit) {
     if ($brand) { Add-Row '品牌识别' $brand 'INFO' }
 }
 
+# ---------------------------------------------------------------- 版本敏感度
+# 本项目已实测的版本窗口；超出范围不代表一定不行，但要先小范围验证再批量用
+$testedStore = '17.11.7'
+$testedUx = '16.1.3'
+$storeDump = ((Invoke-Adb @('shell', 'dumpsys package com.heytap.themestore')) | Out-String)
+$storeVer = if ($storeDump -match 'versionName=([0-9.]+)') { $matches[1] } else { '' }
+$uxDump = ((Invoke-Adb @('shell', 'dumpsys package com.oplus.uxdesign')) | Out-String)
+$uxVer = if ($uxDump -match 'versionName=([0-9.]+)') { $matches[1] } else { '' }
+
+if ($storeVer) {
+    $status = if ($storeVer -eq $testedStore) { 'OK' } else { 'WARN' }
+    Add-Row '主题商店版本' "$storeVer（已测 $testedStore）" $status
+}
+if ($uxVer) {
+    $status = if ($uxVer -eq $testedUx) { 'OK' } else { 'WARN' }
+    Add-Row 'uxdesign 版本' "$uxVer（已测 $testedUx）" $status
+}
+
 # ---------------------------------------------------------------- uxdesign
 $ux = ((Invoke-Adb @('shell', 'pm list packages com.oplus.uxdesign')) | Out-String)
 $hasUx = $ux -match 'com\.oplus\.uxdesign'

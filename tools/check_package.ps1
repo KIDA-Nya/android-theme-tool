@@ -61,6 +61,39 @@ Write-Host ("  适配器: {0}  {1}" -f $adapter.Name, $devNote) -ForegroundColor
 
 $r = & $adapter.TestPackage $Path $devVer
 
+# ---- MIUI / HyperOS 的变砖风险（来自主题作者的官方教程，属安全警告）----
+$miuiWarn = @()
+if ($adapter.Name -eq 'miui') {
+    $miuiVer = ((Invoke-Adb @('shell', 'getprop ro.miui.ui.version.name')) | Out-String).Trim()
+    $hyperVer = ((Invoke-Adb @('shell', 'getprop ro.mi.os.version.name')) | Out-String).Trim()
+
+    # 包内最新文件时间（用来判断是否"2026-01-11 之后"的主题包）
+    $maxDate = $null
+    try {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $zip = [System.IO.Compression.ZipFile]::OpenRead((Get-Item -LiteralPath $Path).FullName)
+        try {
+            $dates = @($zip.Entries | ForEach-Object { $_.LastWriteTime.DateTime })
+            if ($dates.Count -gt 0) { $maxDate = ($dates | Sort-Object)[-1] }
+        }
+        finally { $zip.Dispose() }
+    }
+    catch { }
+
+    if (-not $hyperVer -and $miuiVer) {
+        $miuiWarn += "本机是 MIUI（$miuiVer），不是澎湃OS"
+        $miuiWarn += "MIUI 11 / 12 / 12.5 使用旧主题包有『设备无法开机』的风险，必须用 2026-01-11 之后的新包"
+        $miuiWarn += "MIUI 12 / 12.5 套用 MIUI 13+ 的主题会无限重启（作者标注 100% 复现）——请确认来源标注的版本"
+        if ($maxDate -and $maxDate -lt [datetime]'2026-01-11') {
+            $miuiWarn += ("该包内最新文件时间是 {0:yyyy-MM-dd}，早于 2026-01-11 —— 风险更高，强烈建议不要应用" -f $maxDate)
+        }
+    }
+    elseif ($hyperVer) {
+        $miuiWarn += "本机是澎湃OS（$hyperVer）：请按系统版本选主题（澎湃OS 3 必须用 3.0 主题）"
+        $miuiWarn += "使用主题期间不要更新『主题壁纸 / 主题商店 / 桌面』，作者提示否则可能无法开机"
+    }
+}
+
 Write-Host ''
 Write-Host ("  类型: {0}" -f $r.Kind)
 if ($r.Info -and $r.Info.Count -gt 0) {
@@ -87,6 +120,12 @@ if ($r.Ok) {
 else {
     Write-Host '  [!] 发现问题：' -ForegroundColor Yellow
     foreach ($p in $r.Problems) { Write-Host ("      - {0}" -f $p) -ForegroundColor Yellow }
+}
+
+if ($miuiWarn.Count -gt 0) {
+    Write-Host ''
+    Write-Host '  [风险提示]' -ForegroundColor Red
+    foreach ($w in $miuiWarn) { Write-Host ("      ! {0}" -f $w) -ForegroundColor Red }
 }
 
 if (-not $adapter.SupportsApply) {
